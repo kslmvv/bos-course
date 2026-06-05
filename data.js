@@ -114,34 +114,57 @@ const COURSE_DATA = {
       ]
     },
   ],
+
+  // Бонусы — такая же структура как дни, открываются в плеере
   bonuses: [
     {
+      id: "b1",
       icon: "📝",
       title: "Бонус 1 — Копирайтинг",
       desc: "Копирайтинг и маркетинг-кит",
-      url: "https://youtu.be/",
+      topics: [
+        { title: "Копирайтинг и маркетинг-кит (полное видео)", url: "https://youtu.be/AsejKTiYFYM" }
+      ]
     },
     {
+      id: "b2",
       icon: "🎯",
       title: "Бонус 2 — Стратегия",
       desc: "Стратегическое планирование",
-      url: "https://youtu.be/",
+      topics: [
+        { title: "Стратегическое планирование (полное видео)", url: "https://youtu.be/keG9VwXk0yE" }
+      ]
     },
     {
+      id: "b3",
       icon: "🌟",
       title: "Бонус 3 — Личный бренд",
       desc: "Личный бренд и сообщества",
-      url: "https://youtu.be/",
+      topics: [
+        { title: "Личный бренд и сообщества (полное видео)", url: "https://youtu.be/rOscryWi75I" }
+      ]
     },
   ],
+
+  // Инструменты — тоже открываются в плеере через плейлист
   tools: [
     {
-      title: "🛠 Инструменты менеджмента 2026",
-      url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1",
+      id: "t2026",
+      icon: "🛠",
+      title: "Инструменты менеджмента 2026",
+      desc: "30 практических занятий",
+      topics: [
+        { title: "Инструменты менеджмента 2026 (плейлист)", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
+      ]
     },
     {
-      title: "🛠 Инструменты менеджмента 2025",
-      url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1",
+      id: "t2025",
+      icon: "📋",
+      title: "Инструменты менеджмента 2025",
+      desc: "88 практических занятий",
+      topics: [
+        { title: "Инструменты менеджмента 2025 (плейлист)", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
+      ]
     },
   ]
 };
