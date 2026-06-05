@@ -17,17 +17,14 @@
   }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; overflow-x: hidden; }
 
-  /* NAV */
   .nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid #2a2a2a; z-index: 100; }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 14px; cursor: pointer; color: var(--text2); font-size: 11px; transition: color .2s; }
   .nav-item.active { color: var(--accent); }
   .nav-item span { font-size: 22px; line-height: 1; }
 
-  /* SCREENS */
   .screen { display: none; padding: 16px 16px 80px; }
   .screen.active { display: block; }
 
-  /* HOME */
   .header { padding: 20px 0 8px; }
   .header h1 { font-size: 26px; font-weight: 700; }
   .header p { color: var(--text2); font-size: 14px; margin-top: 4px; }
@@ -40,7 +37,6 @@
   .day-card .label { font-size: 13px; color: var(--text2); margin-top: 4px; }
   .day-card .count { font-size: 11px; color: #555; margin-top: 8px; }
 
-  /* TOPIC LIST */
   .back-btn { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 15px; cursor: pointer; margin-bottom: 16px; padding: 4px 0; }
   .day-header { margin-bottom: 16px; }
   .day-header h2 { font-size: 22px; font-weight: 700; }
@@ -52,27 +48,94 @@
   .topic-num { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #000; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .topic-name { font-size: 14px; line-height: 1.4; flex: 1; }
 
-  /* PLAYER */
   .player-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
   .player-day-badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
   .player-counter { color: var(--text2); font-size: 13px; }
 
-  /* VIDEO WRAP */
-  .video-wrap { position: relative; width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; }
-  .video-wrap iframe { display: block; width: 100%; aspect-ratio: 16/9; border: none; pointer-events: none; }
-  /* Overlay blocks YouTube UI clicks */
-  .yt-overlay { position: absolute; inset: 0; z-index: 5; background: transparent; }
-  /* Controls */
-  .controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 10; background: linear-gradient(transparent, rgba(0,0,0,.85)); padding: 32px 12px 12px; display: flex; flex-direction: column; gap: 8px; transition: opacity .3s; }
+  /* VIDEO */
+  .video-wrap {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: var(--radius);
+    overflow: hidden;
+    /* Fullscreen */
+  }
+  .video-wrap.is-fullscreen {
+    position: fixed !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999;
+    border-radius: 0;
+  }
+  .video-wrap iframe {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16/9;
+    border: none;
+    pointer-events: none;
+  }
+  .video-wrap.is-fullscreen iframe {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: unset;
+  }
+
+  /* Блокируем все клики по YouTube UI */
+  .yt-blocker {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: transparent;
+  }
+  /* Перекрываем верхнюю панель YouTube (заголовок, поделиться) */
+  .yt-top-block {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    z-index: 6;
+    background: #000;
+  }
+  /* Перекрываем нижнюю панель YouTube (логотип, кнопки) */
+  .yt-bottom-block {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 50px;
+    z-index: 6;
+    background: #000;
+  }
+
+  /* Наши контролы */
+  .controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    background: linear-gradient(transparent, rgba(0,0,0,.9));
+    padding: 28px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: opacity .3s;
+  }
   .controls.hidden { opacity: 0; pointer-events: none; }
-  .progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,.2); border-radius: 2px; cursor: pointer; position: relative; }
-  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; transition: width .5s linear; pointer-events: none; }
-  .time-row { display: flex; justify-content: space-between; align-items: center; }
-  .time-display { font-size: 12px; color: rgba(255,255,255,.7); font-variant-numeric: tabular-nums; }
-  .ctrl-btns { display: flex; align-items: center; gap: 16px; }
-  .ctrl-btn { background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center; }
-  .ctrl-btn.play-btn { font-size: 28px; }
-  .ctrl-btn.fs-btn { margin-left: auto; font-size: 20px; }
+
+  .progress-bar {
+    width: 100%; height: 4px;
+    background: rgba(255,255,255,.25);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+  }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; pointer-events: none; }
+
+  .ctrl-row { display: flex; align-items: center; gap: 12px; }
+  .ctrl-btn { background: none; border: none; color: #fff; cursor: pointer; padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .ctrl-btn svg { width: 22px; height: 22px; fill: #fff; }
+  .ctrl-btn.play-btn svg { width: 28px; height: 28px; }
+  .ctrl-btn.fs-btn { margin-left: auto; }
+  .ctrl-btn.fs-btn svg { width: 20px; height: 20px; }
+  .time-display { font-size: 12px; color: rgba(255,255,255,.7); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
   .topic-info { margin-top: 14px; }
   .topic-label { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .6px; }
@@ -82,53 +145,44 @@
   .nav-btn { flex: 1; padding: 13px; border-radius: var(--radius); border: 1px solid #2a2a2a; background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer; transition: background .15s; text-align: center; }
   .nav-btn:disabled { opacity: .3; cursor: default; }
   .nav-btn.next { background: var(--accent); color: #000; font-weight: 600; border-color: var(--accent); }
-  .nav-btn:active:not(:disabled) { transform: scale(.97); }
 
-  /* BONUS */
-  .bonus-card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 1px solid #2a2a2a; transition: background .15s; }
+  .bonus-card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 1px solid #2a2a2a; }
   .bonus-card:active { background: var(--surface2); }
   .bonus-icon { font-size: 32px; }
   .bonus-info h3 { font-size: 15px; font-weight: 600; }
   .bonus-info p { color: var(--text2); font-size: 13px; margin-top: 3px; }
 
-  /* TOOLS */
   .tools-intro { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
   .tools-intro p { color: var(--text2); font-size: 14px; line-height: 1.5; }
   .tools-btn { display: block; width: 100%; padding: 16px; background: var(--accent); color: #000; font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; text-align: center; margin-bottom: 10px; }
-  .tools-sub { color: var(--text2); font-size: 13px; text-align: center; }
-
-  /* Fullscreen styles */
-  .video-wrap:fullscreen { border-radius: 0; }
-  .video-wrap:fullscreen iframe { width: 100vw; height: 100vh; aspect-ratio: unset; }
-  .video-wrap:-webkit-full-screen { border-radius: 0; }
-  .video-wrap:-webkit-full-screen iframe { width: 100vw; height: 100vh; aspect-ratio: unset; }
 </style>
 </head>
 <body>
 
-<!-- SCREENS -->
 <div id="screen-home" class="screen active"></div>
 <div id="screen-days" class="screen"></div>
 <div id="screen-player" class="screen"></div>
 <div id="screen-bonus" class="screen"></div>
 <div id="screen-tools" class="screen"></div>
 
-<!-- NAV -->
 <nav class="nav">
-  <div class="nav-item active" onclick="showTab('home')" id="nav-home">
-    <span>📚</span>Курс
-  </div>
-  <div class="nav-item" onclick="showTab('bonus')" id="nav-bonus">
-    <span>🎁</span>Бонусы
-  </div>
-  <div class="nav-item" onclick="showTab('tools')" id="nav-tools">
-    <span>🛠</span>Инструменты
-  </div>
+  <div class="nav-item active" onclick="showTab('home')" id="nav-home"><span>📚</span>Курс</div>
+  <div class="nav-item" onclick="showTab('bonus')" id="nav-bonus"><span>🎁</span>Бонусы</div>
+  <div class="nav-item" onclick="showTab('tools')" id="nav-tools"><span>🛠</span>Инструменты</div>
 </nav>
+
+<!-- SVG иконки -->
+<svg style="display:none">
+  <symbol id="ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="ic-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></symbol>
+  <symbol id="ic-rew" viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></symbol>
+  <symbol id="ic-fwd" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></symbol>
+  <symbol id="ic-fs" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></symbol>
+  <symbol id="ic-exit-fs" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></symbol>
+</svg>
 
 <script src="data.js"></script>
 <script>
-// ── STATE ─────────────────────────────────────────────
 let currentDay = null;
 let currentTopicIdx = 0;
 let player = null;
@@ -136,39 +190,32 @@ let playerReady = false;
 let controlsTimer = null;
 let isPlaying = false;
 let progressInterval = null;
+let isFs = false;
 
-// ── YOUTUBE API ───────────────────────────────────────
+// YouTube API
 const tag = document.createElement('script');
 tag.src = 'https://www.youtube.com/iframe_api';
 document.head.appendChild(tag);
 
-function onYouTubeIframeAPIReady() {
-  // API ready — player created on demand
-}
+function onYouTubeIframeAPIReady() {}
 
 function createPlayer(videoId) {
-  if (player) { player.destroy(); player = null; }
-  playerReady = false;
-  isPlaying = false;
+  if (player) { try { player.destroy(); } catch(e){} player = null; }
+  playerReady = false; isPlaying = false;
   clearInterval(progressInterval);
   updatePlayBtn();
 
   player = new YT.Player('yt-player', {
     videoId: videoId,
     playerVars: {
-      autoplay: 1,
-      controls: 0,
-      disablekb: 1,
-      fs: 0,
-      modestbranding: 1,
-      rel: 0,
-      showinfo: 0,
-      iv_load_policy: 3,
-      playsinline: 1,
-      enablejsapi: 1
+      autoplay: 1, controls: 0, disablekb: 1, fs: 0,
+      modestbranding: 1, rel: 0, showinfo: 0,
+      iv_load_policy: 3, playsinline: 1, enablejsapi: 1,
+      // Убираем логотип и кнопки
+      color: 'white', loop: 0
     },
     events: {
-      onReady: function(e) {
+      onReady(e) {
         playerReady = true;
         e.target.playVideo();
         isPlaying = true;
@@ -176,12 +223,9 @@ function createPlayer(videoId) {
         startProgress();
         showControls();
       },
-      onStateChange: function(e) {
-        if (e.data === YT.PlayerState.PLAYING) {
-          isPlaying = true; startProgress();
-        } else {
-          isPlaying = false; clearInterval(progressInterval);
-        }
+      onStateChange(e) {
+        isPlaying = (e.data === YT.PlayerState.PLAYING);
+        if (isPlaying) startProgress(); else clearInterval(progressInterval);
         updatePlayBtn();
       }
     }
@@ -190,43 +234,41 @@ function createPlayer(videoId) {
 
 function togglePlay() {
   if (!playerReady) return;
-  if (isPlaying) { player.pauseVideo(); }
-  else { player.playVideo(); }
+  isPlaying ? player.pauseVideo() : player.playVideo();
 }
 
-function seek(delta) {
+function seek(d) {
   if (!playerReady) return;
-  const t = player.getCurrentTime() + delta;
-  player.seekTo(Math.max(0, t), true);
+  player.seekTo(Math.max(0, player.getCurrentTime() + d), true);
 }
 
 function startProgress() {
   clearInterval(progressInterval);
-  progressInterval = setInterval(updateProgress, 1000);
+  progressInterval = setInterval(updateProgress, 500);
 }
 
 function updateProgress() {
   if (!playerReady) return;
   try {
-    const cur = player.getCurrentTime();
-    const dur = player.getDuration();
+    const cur = player.getCurrentTime(), dur = player.getDuration();
     if (!dur) return;
-    const pct = (cur / dur) * 100;
-    document.getElementById('progress-fill').style.width = pct + '%';
-    document.getElementById('time-cur').textContent = fmt(cur);
-    document.getElementById('time-dur').textContent = fmt(dur);
+    document.getElementById('pf').style.width = (cur/dur*100) + '%';
+    document.getElementById('tc').textContent = fmt(cur);
+    document.getElementById('td').textContent = fmt(dur);
   } catch(e) {}
 }
 
 function fmt(s) {
   s = Math.floor(s);
-  const m = Math.floor(s / 60), sec = s % 60;
-  return m + ':' + String(sec).padStart(2,'0');
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
 }
 
 function updatePlayBtn() {
   const btn = document.getElementById('play-btn');
-  if (btn) btn.textContent = isPlaying ? '⏸' : '▶';
+  if (!btn) return;
+  btn.innerHTML = isPlaying
+    ? '<svg><use href="#ic-pause"/></svg>'
+    : '<svg><use href="#ic-play"/></svg>';
 }
 
 function seekByBar(e) {
@@ -237,20 +279,59 @@ function seekByBar(e) {
   player.seekTo(pct * player.getDuration(), true);
 }
 
-// ── FULLSCREEN ────────────────────────────────────────
+// ── FULLSCREEN (CSS-based для Telegram WebApp) ──────────
 function toggleFullscreen() {
   const wrap = document.getElementById('video-wrap');
   if (!wrap) return;
-  const isFs = document.fullscreenElement || document.webkitFullscreenElement;
-  if (isFs) {
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+
+  // Сначала пробуем нативный Fullscreen API
+  const fsReq = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen;
+  const fsExit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+
+  if (fsEl) {
+    fsExit.call(document);
+  } else if (fsReq) {
+    fsReq.call(wrap).catch(() => {
+      // Если нативный API недоступен (Telegram) — используем CSS fullscreen
+      cssFullscreen(wrap);
+    });
   } else {
-    const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
-    if (req) req.call(wrap);
+    cssFullscreen(wrap);
   }
 }
 
-// ── CONTROLS VISIBILITY ───────────────────────────────
+function cssFullscreen(wrap) {
+  isFs = !isFs;
+  wrap.classList.toggle('is-fullscreen', isFs);
+  document.body.style.overflow = isFs ? 'hidden' : '';
+  updateFsBtn();
+  // Пересчитываем размер iframe
+  const iframe = wrap.querySelector('iframe');
+  if (iframe && isFs) {
+    iframe.style.height = window.innerHeight + 'px';
+  } else if (iframe) {
+    iframe.style.height = '';
+  }
+}
+
+function updateFsBtn() {
+  const btn = document.getElementById('fs-btn');
+  if (!btn) return;
+  btn.innerHTML = isFs
+    ? '<svg><use href="#ic-exit-fs"/></svg>'
+    : '<svg><use href="#ic-fs"/></svg>';
+}
+
+// Слушаем нативный выход из fullscreen
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) { isFs = false; updateFsBtn(); }
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.webkitFullscreenElement) { isFs = false; updateFsBtn(); }
+});
+
+// ── CONTROLS ─────────────────────────────────────────────
 function showControls() {
   const ctrl = document.getElementById('controls');
   if (!ctrl) return;
@@ -258,31 +339,33 @@ function showControls() {
   clearTimeout(controlsTimer);
   controlsTimer = setTimeout(() => {
     if (isPlaying) ctrl.classList.add('hidden');
-  }, 3000);
+  }, 3500);
 }
 
-// ── NAV TABS ─────────────────────────────────────────
+// ── TABS ──────────────────────────────────────────────────
 function showTab(tab) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('screen-' + (tab === 'home' ? 'home' : tab)).classList.add('active');
-  document.getElementById('nav-' + tab).classList.add('active');
+  const screenId = tab === 'home' ? 'screen-home' : `screen-${tab}`;
+  document.getElementById(screenId).classList.add('active');
+  document.getElementById(`nav-${tab}`).classList.add('active');
   if (tab !== 'player') stopVideo();
 }
 
 function stopVideo() {
   if (player && playerReady) { try { player.stopVideo(); } catch(e){} }
   clearInterval(progressInterval);
+  // Выходим из fullscreen если активен
+  if (isFs) {
+    const wrap = document.getElementById('video-wrap');
+    if (wrap) cssFullscreen(wrap);
+  }
 }
 
-// ── HOME SCREEN ───────────────────────────────────────
+// ── HOME ──────────────────────────────────────────────────
 function renderHome() {
-  const el = document.getElementById('screen-home');
-  el.innerHTML = `
-    <div class="header">
-      <h1>БОС Курс</h1>
-      <p>Бизнес Операционная Система</p>
-    </div>
+  document.getElementById('screen-home').innerHTML = `
+    <div class="header"><h1>БОС Курс</h1><p>Бизнес Операционная Система</p></div>
     <div class="section-title">Программа курса</div>
     <div class="day-grid">
       ${COURSE_DATA.days.map(d => `
@@ -290,33 +373,25 @@ function renderHome() {
           <div class="num">${d.id}</div>
           <div class="label">${d.title}</div>
           <div class="count">${d.topics.length} тем</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+        </div>`).join('')}
+    </div>`;
 }
 
-// ── DAY SCREEN ────────────────────────────────────────
+// ── DAY ───────────────────────────────────────────────────
 function openDay(dayId) {
   currentDay = COURSE_DATA.days.find(d => d.id === dayId);
-  const el = document.getElementById('screen-days');
-  el.innerHTML = `
+  document.getElementById('screen-days').innerHTML = `
     <div class="back-btn" onclick="showHome()">← Назад</div>
-    <div class="day-header">
-      <h2>День ${currentDay.id}</h2>
-      <p>${currentDay.title}</p>
-    </div>
+    <div class="day-header"><h2>День ${currentDay.id}</h2><p>${currentDay.title}</p></div>
     <div class="topic-list">
-      ${currentDay.topics.map((t, i) => `
+      ${currentDay.topics.map((t,i) => `
         <div class="topic-item" onclick="openPlayer(${i})">
           <div class="topic-num">${i+1}</div>
           <div class="topic-name">${t.title}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+        </div>`).join('')}
+    </div>`;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  el.classList.add('active');
+  document.getElementById('screen-days').classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('nav-home').classList.add('active');
 }
@@ -327,36 +402,45 @@ function showHome() {
   document.getElementById('screen-home').classList.add('active');
 }
 
-// ── PLAYER SCREEN ─────────────────────────────────────
+// ── PLAYER ────────────────────────────────────────────────
 function openPlayer(idx) {
   currentTopicIdx = idx;
   const topic = currentDay.topics[idx];
   const total = currentDay.topics.length;
   const videoId = extractVideoId(topic.url);
 
-  const el = document.getElementById('screen-player');
-  el.innerHTML = `
+  document.getElementById('screen-player').innerHTML = `
     <div class="back-btn" onclick="openDay(${currentDay.id})">← День ${currentDay.id}</div>
     <div class="player-header">
       <div class="player-day-badge">ДЕНЬ ${currentDay.id}</div>
       <div class="player-counter">${idx+1} из ${total}</div>
     </div>
 
-    <div class="video-wrap" id="video-wrap" onclick="showControls()">
+    <div class="video-wrap" id="video-wrap">
       <div id="yt-player"></div>
-      <div class="yt-overlay" onclick="showControls(); togglePlay();"></div>
+      <!-- Блокируем весь YouTube UI -->
+      <div class="yt-top-block"></div>
+      <div class="yt-bottom-block"></div>
+      <div class="yt-blocker" onclick="showControls(); togglePlay();"></div>
+
       <div class="controls hidden" id="controls">
         <div class="progress-bar" onclick="seekByBar(event)">
-          <div class="progress-fill" id="progress-fill"></div>
+          <div class="progress-fill" id="pf"></div>
         </div>
-        <div class="time-row">
-          <div class="ctrl-btns">
-            <button class="ctrl-btn" onclick="seek(-10); event.stopPropagation()">⏪</button>
-            <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlay(); event.stopPropagation()">▶</button>
-            <button class="ctrl-btn" onclick="seek(10); event.stopPropagation()">⏩</button>
-          </div>
-          <span class="time-display"><span id="time-cur">0:00</span> / <span id="time-dur">0:00</span></span>
-          <button class="ctrl-btn fs-btn" onclick="toggleFullscreen(); event.stopPropagation()">⛶</button>
+        <div class="ctrl-row">
+          <button class="ctrl-btn" onclick="seek(-10);event.stopPropagation()">
+            <svg><use href="#ic-rew"/></svg>
+          </button>
+          <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlay();event.stopPropagation()">
+            <svg><use href="#ic-play"/></svg>
+          </button>
+          <button class="ctrl-btn" onclick="seek(10);event.stopPropagation()">
+            <svg><use href="#ic-fwd"/></svg>
+          </button>
+          <span class="time-display"><span id="tc">0:00</span> / <span id="td">0:00</span></span>
+          <button class="ctrl-btn fs-btn" id="fs-btn" onclick="toggleFullscreen();event.stopPropagation()">
+            <svg><use href="#ic-fs"/></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -365,22 +449,18 @@ function openPlayer(idx) {
       <div class="topic-label">День ${currentDay.id} — Тема ${idx+1}</div>
       <div class="topic-title">${topic.title}</div>
     </div>
-
     <div class="nav-btns">
-      <button class="nav-btn" onclick="prevTopic()" ${idx === 0 ? 'disabled' : ''}>← Предыдущее</button>
-      <button class="nav-btn next" onclick="nextTopic()" ${idx === total-1 ? 'disabled' : ''}>Следующее →</button>
-    </div>
-  `;
+      <button class="nav-btn" onclick="prevTopic()" ${idx===0?'disabled':''}>← Предыдущее</button>
+      <button class="nav-btn next" onclick="nextTopic()" ${idx===total-1?'disabled':''}>Следующее →</button>
+    </div>`;
 
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  el.classList.add('active');
-
-  // Create player after DOM is ready
-  setTimeout(() => createPlayer(videoId), 100);
+  document.getElementById('screen-player').classList.add('active');
+  setTimeout(() => createPlayer(videoId), 150);
 }
 
-function prevTopic() { if (currentTopicIdx > 0) openPlayer(currentTopicIdx - 1); }
-function nextTopic() { if (currentTopicIdx < currentDay.topics.length - 1) openPlayer(currentTopicIdx + 1); }
+function prevTopic() { if (currentTopicIdx > 0) openPlayer(currentTopicIdx-1); }
+function nextTopic() { if (currentTopicIdx < currentDay.topics.length-1) openPlayer(currentTopicIdx+1); }
 
 function extractVideoId(url) {
   if (!url) return '';
@@ -388,48 +468,27 @@ function extractVideoId(url) {
   return m ? m[1] : url;
 }
 
-// ── BONUS SCREEN ──────────────────────────────────────
+// ── BONUS ─────────────────────────────────────────────────
 function renderBonus() {
-  const el = document.getElementById('screen-bonus');
-  el.innerHTML = `
-    <div class="header">
-      <h1>Бонусы</h1>
-      <p>Дополнительные материалы</p>
-    </div>
+  document.getElementById('screen-bonus').innerHTML = `
+    <div class="header"><h1>Бонусы</h1><p>Дополнительные материалы</p></div>
     ${COURSE_DATA.bonuses.map(b => `
       <div class="bonus-card" onclick="window.open('${b.url}','_blank')">
         <div class="bonus-icon">${b.icon}</div>
-        <div class="bonus-info">
-          <h3>${b.title}</h3>
-          <p>${b.desc}</p>
-        </div>
-      </div>
-    `).join('')}
-  `;
+        <div class="bonus-info"><h3>${b.title}</h3><p>${b.desc}</p></div>
+      </div>`).join('')}`;
 }
 
-// ── TOOLS SCREEN ──────────────────────────────────────
+// ── TOOLS ─────────────────────────────────────────────────
 function renderTools() {
-  const el = document.getElementById('screen-tools');
-  el.innerHTML = `
-    <div class="header">
-      <h1>Инструменты</h1>
-      <p>Менеджмент практикум</p>
-    </div>
-    <div class="tools-intro">
-      <p>Записи практических занятий по инструментам менеджмента — плейлисты по годам.</p>
-    </div>
+  document.getElementById('screen-tools').innerHTML = `
+    <div class="header"><h1>Инструменты</h1><p>Менеджмент практикум</p></div>
+    <div class="tools-intro"><p>Записи практических занятий по инструментам менеджмента — плейлисты по годам.</p></div>
     ${COURSE_DATA.tools.map(t => `
-      <button class="tools-btn" onclick="window.open('${t.url}','_blank')">${t.title}</button>
-    `).join('')}
-    <div class="tools-sub">Открывается на YouTube</div>
-  `;
+      <button class="tools-btn" onclick="window.open('${t.url}','_blank')">${t.title}</button>`).join('')}`;
 }
 
-// ── INIT ──────────────────────────────────────────────
-renderHome();
-renderBonus();
-renderTools();
+renderHome(); renderBonus(); renderTools();
 </script>
 </body>
 </html>
