@@ -246,6 +246,8 @@
     aspect-ratio: 16/9;
     position: relative;
     overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .player-iframe {
@@ -512,6 +514,17 @@
     <iframe id="player-iframe" class="player-iframe" allowfullscreen
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
     </iframe>
+    <!-- Блокировщик кнопки Share — закрывает нижний правый угол плеера -->
+    <div id="share-blocker" style="
+      display: none;
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 120px;
+      height: 48px;
+      z-index: 10;
+      background: transparent;
+    "></div>
   </div>
 
   <div class="video-info-panel">
@@ -746,9 +759,13 @@ function playVideo() {
   const videoId = match[1] || match[2];
 
   const iframe = document.getElementById('player-iframe');
-  iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+  iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&disablekb=0&iv_load_policy=3`;
   iframe.style.display = 'block';
   document.getElementById('player-placeholder').style.display = 'none';
+
+  // Блокируем кнопку Share через overlay
+  const overlay = document.getElementById('share-blocker');
+  if (overlay) overlay.style.display = 'block';
 }
 
 function prevVideo() {
