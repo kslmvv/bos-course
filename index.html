@@ -30,13 +30,21 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .titem:active{background:var(--sur2)}
 .tnum{width:28px;height:28px;border-radius:50%;background:var(--acc);color:#000;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tname{font-size:14px;line-height:1.4}
+
+/* Карточки бонусов и инструментов */
+.bcard{background:var(--sur);border-radius:var(--r);padding:16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:14px;border:1px solid #2a2a2a}
+.bcard:active{background:var(--sur2)}
+.bico{font-size:36px;flex-shrink:0}
+.binfo h3{font-size:15px;font-weight:600}
+.binfo p{color:var(--tx2);font-size:13px;margin-top:3px}
+.barrow{margin-left:auto;color:var(--tx2);font-size:18px}
+
 .pbadge{background:var(--acc);color:#000;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-block}
 .pcnt{color:var(--tx2);font-size:13px;display:inline-block;margin-left:8px}
 
-/* Экран плеера — фиксированная структура, НЕ пересоздаётся */
+/* ПЛЕЕР — фиксированная структура */
 #s-player{display:none;flex-direction:column;padding:16px 16px 80px}
 #s-player.on{display:flex}
-
 .vwrap{position:relative;width:100%;background:#000;border-radius:var(--r);overflow:hidden;margin-top:12px;flex-shrink:0}
 .vwrap iframe{display:block;width:100%;aspect-ratio:16/9;border:none;pointer-events:none}
 .ytop{position:absolute;top:0;left:0;right:0;height:60px;background:#000;z-index:11}
@@ -65,20 +73,16 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .nbtn{flex:1;padding:13px;border-radius:var(--r);border:1px solid #2a2a2a;background:var(--sur);color:var(--tx);font-size:14px;cursor:pointer;text-align:center}
 .nbtn:disabled{opacity:.3;cursor:default;pointer-events:none}
 .nbtn.nx{background:var(--acc);color:#000;font-weight:600;border-color:var(--acc)}
-.bcard{background:var(--sur);border-radius:var(--r);padding:16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:14px;border:1px solid #2a2a2a}
-.bcard:active{background:var(--sur2)}
-.bico{font-size:32px}.binfo h3{font-size:15px;font-weight:600}.binfo p{color:var(--tx2);font-size:13px;margin-top:3px}
-.tintro{background:var(--sur);border-radius:var(--r);padding:16px;margin-bottom:16px;border:1px solid #2a2a2a}
-.tintro p{color:var(--tx2);font-size:14px;line-height:1.5}
-.tbtn{display:block;width:100%;padding:16px;background:var(--acc);color:#000;font-size:15px;font-weight:700;border:none;border-radius:var(--r);cursor:pointer;text-align:center;margin-bottom:10px}
 </style>
 </head>
 <body>
 
 <div id="s-home" class="sc on"></div>
 <div id="s-days" class="sc"></div>
+<div id="s-bonus" class="sc"></div>
+<div id="s-tools" class="sc"></div>
 
-<!-- ПЛЕЕР — фиксированная структура, создаётся один раз -->
+<!-- ПЛЕЕР — один на всё приложение, не пересоздаётся -->
 <div id="s-player">
   <div id="p-back" class="back">← Назад</div>
   <div id="p-header" style="margin-bottom:12px"></div>
@@ -120,9 +124,6 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
   </div>
 </div>
 
-<div id="s-bonus" class="sc"></div>
-<div id="s-tools" class="sc"></div>
-
 <nav class="nav">
   <div class="ni on" id="n-home" onclick="goTab('home')"><i>📚</i>Курс</div>
   <div class="ni" id="n-bonus" onclick="goTab('bonus')"><i>🎁</i>Бонусы</div>
@@ -140,201 +141,141 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 <script src="data.js"></script>
 <script>
-var G={day:null,idx:0,player:null,ready:false,playing:false,fs:false,ctrlTimer:null,progTimer:null,ytReady:false};
+// Состояние
+var G = {
+  topics: [],      // текущий список тем (дни / бонус / инструмент)
+  idx: 0,
+  backFn: null,    // функция кнопки "Назад"
+  badgeText: '',   // текст бейджа (ДЕНЬ 1 / БОНУС 1 / ...)
+  player: null,
+  ytReady: false,
+  playing: false,
+  ready: false,
+  fs: false,
+  pendingVid: null,
+  ctrlTimer: null,
+  progTimer: null
+};
 
-// YouTube API
-(function(){var t=document.createElement('script');t.src='https://www.youtube.com/iframe_api';document.head.appendChild(t);})();
+// YouTube API — один плеер на всё время
+(function(){ var t=document.createElement('script'); t.src='https://www.youtube.com/iframe_api'; document.head.appendChild(t); })();
 
 function onYouTubeIframeAPIReady(){
-  G.ytReady=true;
-  // Создаём плеер один раз — он будет жить всё время
-  G.player=new YT.Player('ytpl',{
-    playerVars:{controls:0,disablekb:1,fs:0,modestbranding:1,rel:0,showinfo:0,iv_load_policy:3,playsinline:1,enablejsapi:1},
-    events:{
-      onReady:function(){
-        // Плеер готов, если есть pendingVid — загружаем
-        if(G.pendingVid){
-          G.player.loadVideoById(G.pendingVid);
-          G.pendingVid=null;
-        }
+  G.ytReady = true;
+  G.player = new YT.Player('ytpl', {
+    playerVars: { controls:0, disablekb:1, fs:0, modestbranding:1, rel:0, showinfo:0, iv_load_policy:3, playsinline:1, enablejsapi:1 },
+    events: {
+      onReady: function(){
+        if(G.pendingVid){ G.player.loadVideoById(G.pendingVid); G.pendingVid=null; }
       },
-      onStateChange:function(e){
-        G.playing=(e.data===YT.PlayerState.PLAYING);
-        if(G.playing){G.ready=true;startProg();}else{clearInterval(G.progTimer);}
+      onStateChange: function(e){
+        G.playing = (e.data === YT.PlayerState.PLAYING);
+        if(G.playing){ G.ready=true; startProg(); } else { clearInterval(G.progTimer); }
         syncPB();
       }
     }
   });
 }
 
-// Загружаем новое видео в существующий плеер
 function loadVideo(vid){
   clearInterval(G.progTimer);
-  G.ready=false; G.playing=false;
-  syncPB();
-  // Сброс прогресса
-  var pf=document.getElementById('pf');if(pf)pf.style.width='0%';
-  var tc=document.getElementById('tc');if(tc)tc.textContent='0:00';
-  var td=document.getElementById('td');if(td)td.textContent='0:00';
-
-  if(G.ytReady && G.player && typeof G.player.loadVideoById==='function'){
+  G.ready=false; G.playing=false; syncPB();
+  var pf=document.getElementById('pf'); if(pf) pf.style.width='0%';
+  var tc=document.getElementById('tc'); if(tc) tc.textContent='0:00';
+  var td=document.getElementById('td'); if(td) td.textContent='0:00';
+  if(G.ytReady && G.player && G.player.loadVideoById){
     G.player.loadVideoById(vid);
-    G.ready=true;
-    showCtrl();
+    G.ready=true; showCtrl();
   } else {
     G.pendingVid=vid;
   }
 }
 
-function doPlay(){
-  if(!G.player||!G.ytReady)return;
-  try{G.playing?G.player.pauseVideo():G.player.playVideo();}catch(e){}
-}
-
-function doSeek(d){
-  if(!G.player||!G.ytReady)return;
-  try{G.player.seekTo(Math.max(0,G.player.getCurrentTime()+d),true);}catch(e){}
-}
+function doPlay(){ if(!G.player||!G.ytReady)return; try{ G.playing?G.player.pauseVideo():G.player.playVideo(); }catch(e){} }
+function doSeek(d){ if(!G.player||!G.ytReady)return; try{ G.player.seekTo(Math.max(0,G.player.getCurrentTime()+d),true); }catch(e){} }
 
 function startProg(){
   clearInterval(G.progTimer);
   G.progTimer=setInterval(function(){
     if(!G.player||!G.ytReady)return;
     try{
-      var cur=G.player.getCurrentTime(),dur=G.player.getDuration();
+      var cur=G.player.getCurrentTime(), dur=G.player.getDuration();
       if(!dur)return;
-      var pf=document.getElementById('pf');if(pf)pf.style.width=(cur/dur*100)+'%';
-      var tc=document.getElementById('tc');if(tc)tc.textContent=fmt(cur);
-      var td=document.getElementById('td');if(td)td.textContent=fmt(dur);
+      var pf=document.getElementById('pf'); if(pf) pf.style.width=(cur/dur*100)+'%';
+      var tc=document.getElementById('tc'); if(tc) tc.textContent=fmt(cur);
+      var td=document.getElementById('td'); if(td) td.textContent=fmt(dur);
     }catch(e){}
   },500);
 }
 
-function fmt(s){s=Math.floor(s||0);return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);}
-
-function syncPB(){
-  var b=document.getElementById('pb');if(!b)return;
-  b.innerHTML=G.playing?'<svg><use href="#i-pause"/></svg>':'<svg><use href="#i-play"/></svg>';
-}
+function fmt(s){ s=Math.floor(s||0); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
+function syncPB(){ var b=document.getElementById('pb'); if(!b)return; b.innerHTML=G.playing?'<svg><use href="#i-pause"/></svg>':'<svg><use href="#i-play"/></svg>'; }
 
 function clickBar(e){
   if(!G.player||!G.ytReady)return;
-  try{
-    var r=e.currentTarget.getBoundingClientRect();
-    G.player.seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*G.player.getDuration(),true);
-  }catch(e){}
+  try{ var r=e.currentTarget.getBoundingClientRect(); G.player.seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*G.player.getDuration(),true); }catch(e){}
 }
 
 function doFS(){
-  var w=document.getElementById('vw');if(!w)return;
+  var w=document.getElementById('vw'); if(!w)return;
   var req=w.requestFullscreen||w.webkitRequestFullscreen;
   var fsEl=document.fullscreenElement||document.webkitFullscreenElement;
-  if(fsEl){(document.exitFullscreen||document.webkitExitFullscreen).call(document);}
-  else if(req){req.call(w).then(function(){G.fs=true;syncFS();}).catch(function(){cssFS(w);});}
-  else{cssFS(w);}
+  if(fsEl){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
+  else if(req){ req.call(w).then(function(){G.fs=true;syncFS();}).catch(function(){cssFS(w);}); }
+  else{ cssFS(w); }
 }
-function cssFS(w){
-  G.fs=!G.fs;w.classList.toggle('fs',G.fs);document.body.style.overflow=G.fs?'hidden':'';
-  var f=w.querySelector('iframe');
-  if(f)f.style.cssText=G.fs?'width:100vw!important;height:100vh!important;aspect-ratio:unset!important':'';
-  syncFS();
-}
-function syncFS(){var b=document.getElementById('fsb');if(!b)return;b.innerHTML=G.fs?'<svg><use href="#i-xfs"/></svg>':'<svg><use href="#i-fs"/></svg>';}
-document.addEventListener('fullscreenchange',function(){if(!document.fullscreenElement){G.fs=false;syncFS();}});
-document.addEventListener('webkitfullscreenchange',function(){if(!document.webkitFullscreenElement){G.fs=false;syncFS();}});
+function cssFS(w){ G.fs=!G.fs; w.classList.toggle('fs',G.fs); document.body.style.overflow=G.fs?'hidden':''; var f=w.querySelector('iframe'); if(f) f.style.cssText=G.fs?'width:100vw!important;height:100vh!important;aspect-ratio:unset!important':''; syncFS(); }
+function syncFS(){ var b=document.getElementById('fsb'); if(!b)return; b.innerHTML=G.fs?'<svg><use href="#i-xfs"/></svg>':'<svg><use href="#i-fs"/></svg>'; }
+document.addEventListener('fullscreenchange',function(){ if(!document.fullscreenElement){G.fs=false;syncFS();} });
+document.addEventListener('webkitfullscreenchange',function(){ if(!document.webkitFullscreenElement){G.fs=false;syncFS();} });
 
 function showCtrl(){
-  var c=document.getElementById('ctrl');if(!c)return;
+  var c=document.getElementById('ctrl'); if(!c)return;
   c.classList.add('show');
   clearTimeout(G.ctrlTimer);
-  G.ctrlTimer=setTimeout(function(){if(G.playing)c.classList.remove('show');},3500);
+  G.ctrlTimer=setTimeout(function(){ if(G.playing) c.classList.remove('show'); },3500);
 }
 
 function stopVideo(){
-  clearInterval(G.progTimer);clearTimeout(G.ctrlTimer);
-  if(G.player&&G.ytReady){try{G.player.stopVideo();}catch(e){}}
-  G.playing=false;syncPB();
+  clearInterval(G.progTimer); clearTimeout(G.ctrlTimer);
+  if(G.player&&G.ytReady){ try{G.player.stopVideo();}catch(e){} }
+  G.playing=false; syncPB();
 }
 
-// TABS
-function goTab(t){
-  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
-  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
-  var el=document.getElementById('s-'+t);if(el)el.classList.add('on');
-  var ni=document.getElementById('n-'+t);if(ni)ni.classList.add('on');
-  if(t!=='player')stopVideo();
-}
+// ── УНИВЕРСАЛЬНЫЙ ПЛЕЕР ──────────────────────────────
+// Принимает список тем, индекс, текст бейджа, функцию "назад"
+function openPlayer(topics, idx, badgeText, backFn){
+  G.topics   = topics;
+  G.idx      = idx;
+  G.badgeText= badgeText;
+  G.backFn   = backFn;
 
-// HOME
-function buildHome(){
-  var h='<div class="hdr"><h1>БОС Курс</h1><p>Бизнес Операционная Система</p></div><div class="stitle">Программа курса</div><div class="grid">';
-  COURSE_DATA.days.forEach(function(d){
-    h+='<div class="dcard" onclick="openDay('+d.id+')"><div class="n">'+d.id+'</div><div class="l">'+d.title+'</div><div class="c">'+d.topics.length+' тем</div></div>';
-  });
-  document.getElementById('s-home').innerHTML=h+'</div>';
-}
+  var tp    = G.topics[G.idx];
+  var total = G.topics.length;
+  var vid   = getVid(tp.url);
 
-// DAY
-function openDay(id){
-  for(var i=0;i<COURSE_DATA.days.length;i++){if(COURSE_DATA.days[i].id===id){G.day=COURSE_DATA.days[i];break;}}
-  if(!G.day)return;
-  var h='<div class="back" onclick="goHome()">← Назад</div>'
-    +'<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">День '+G.day.id+'</div>'
-    +'<div style="color:var(--tx2);font-size:13px;margin-top:4px">'+G.day.title+'</div></div><div class="tlist">';
-  G.day.topics.forEach(function(tp,i){
-    h+='<div class="titem" onclick="openPlayer('+i+')"><div class="tnum">'+(i+1)+'</div><div class="tname">'+tp.title+'</div></div>';
-  });
-  document.getElementById('s-days').innerHTML=h+'</div>';
-  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
-  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
-  document.getElementById('s-days').classList.add('on');
-  document.getElementById('n-home').classList.add('on');
-}
-
-function goHome(){
-  stopVideo();
-  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
-  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
-  document.getElementById('s-home').classList.add('on');
-  document.getElementById('n-home').classList.add('on');
-}
-
-// PLAYER — только обновляем данные, структура DOM не меняется
-function openPlayer(idx){
-  if(!G.day)return;
-  G.idx=idx;
-  var tp=G.day.topics[G.idx];
-  var total=G.day.topics.length;
-  var vid=getVid(tp.url);
-
-  // Обновляем только текстовые данные
-  document.getElementById('p-back').onclick=function(){openDay(G.day.id);};
-  document.getElementById('p-header').innerHTML='<span class="pbadge">ДЕНЬ '+G.day.id+'</span><span class="pcnt">'+(G.idx+1)+' из '+total+'</span>';
-  document.getElementById('p-label').className='';
+  document.getElementById('p-back').onclick = G.backFn;
+  document.getElementById('p-header').innerHTML =
+    '<span class="pbadge">'+G.badgeText+'</span>'
+    +'<span class="pcnt">'+(G.idx+1)+' из '+total+'</span>';
+  document.getElementById('p-label').textContent = G.badgeText+' — '+(G.idx+1);
   document.getElementById('p-label').style.cssText='font-size:12px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin-top:14px';
-  document.getElementById('p-label').textContent='День '+G.day.id+' — Тема '+(G.idx+1);
+  document.getElementById('p-title').textContent  = tp.title;
   document.getElementById('p-title').style.cssText='font-size:18px;font-weight:700;margin-top:4px;line-height:1.3';
-  document.getElementById('p-title').textContent=tp.title;
 
-  // Кнопки навигации
-  var bp=document.getElementById('btn-prev');
-  var bn=document.getElementById('btn-next');
-  bp.disabled=(G.idx===0);
-  bn.disabled=(G.idx===total-1);
+  document.getElementById('btn-prev').disabled = (G.idx===0);
+  document.getElementById('btn-next').disabled = (G.idx===total-1);
 
   // Показываем экран плеера
-  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.sc,#s-player').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
   document.getElementById('s-player').classList.add('on');
-  document.getElementById('n-home').classList.add('on');
 
-  // Загружаем видео
   loadVideo(vid);
 }
 
-// Навигация — простые функции
-function goPrev(){if(G.day&&G.idx>0)openPlayer(G.idx-1);}
-function goNext(){if(G.day&&G.idx<G.day.topics.length-1)openPlayer(G.idx+1);}
+function goPrev(){ if(G.idx>0) openPlayer(G.topics, G.idx-1, G.badgeText, G.backFn); }
+function goNext(){ if(G.idx<G.topics.length-1) openPlayer(G.topics, G.idx+1, G.badgeText, G.backFn); }
 
 function getVid(url){
   if(!url)return'';
@@ -342,25 +283,105 @@ function getVid(url){
   return m?m[1]:'';
 }
 
-// BONUS
+// ── TABS ─────────────────────────────────────────────
+function goTab(t){
+  document.querySelectorAll('.sc,#s-player').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
+  document.getElementById('s-'+t).classList.add('on');
+  document.getElementById('n-'+t).classList.add('on');
+  stopVideo();
+}
+
+// ── HOME ─────────────────────────────────────────────
+function buildHome(){
+  var h='<div class="hdr"><h1>БОС Курс</h1><p>Бизнес Операционная Система</p></div>'
+    +'<div class="stitle">Программа курса</div><div class="grid">';
+  COURSE_DATA.days.forEach(function(d){
+    h+='<div class="dcard" onclick="openDay('+d.id+')">'
+      +'<div class="n">'+d.id+'</div>'
+      +'<div class="l">'+d.title+'</div>'
+      +'<div class="c">'+d.topics.length+' тем</div>'
+      +'</div>';
+  });
+  document.getElementById('s-home').innerHTML=h+'</div>';
+}
+
+// ── DAY ──────────────────────────────────────────────
+function openDay(id){
+  var day=null;
+  for(var i=0;i<COURSE_DATA.days.length;i++){ if(COURSE_DATA.days[i].id===id){day=COURSE_DATA.days[i];break;} }
+  if(!day)return;
+
+  var h='<div class="back" onclick="goHome()">← Назад</div>'
+    +'<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">День '+day.id+'</div>'
+    +'<div style="color:var(--tx2);font-size:13px;margin-top:4px">'+day.title+'</div></div>'
+    +'<div class="tlist">';
+  day.topics.forEach(function(tp,i){
+    h+='<div class="titem" onclick="openDayVideo('+day.id+','+i+')">'
+      +'<div class="tnum">'+(i+1)+'</div>'
+      +'<div class="tname">'+tp.title+'</div>'
+      +'</div>';
+  });
+  document.getElementById('s-days').innerHTML=h+'</div>';
+
+  document.querySelectorAll('.sc,#s-player').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
+  document.getElementById('s-days').classList.add('on');
+  document.getElementById('n-home').classList.add('on');
+}
+
+function openDayVideo(dayId, idx){
+  var day=null;
+  for(var i=0;i<COURSE_DATA.days.length;i++){ if(COURSE_DATA.days[i].id===dayId){day=COURSE_DATA.days[i];break;} }
+  if(!day)return;
+  openPlayer(day.topics, idx, 'ДЕНЬ '+dayId, function(){ openDay(dayId); });
+}
+
+function goHome(){
+  stopVideo();
+  document.querySelectorAll('.sc,#s-player').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
+  document.getElementById('s-home').classList.add('on');
+  document.getElementById('n-home').classList.add('on');
+}
+
+// ── BONUS ────────────────────────────────────────────
 function buildBonus(){
   var h='<div class="hdr"><h1>Бонусы</h1><p>Дополнительные материалы</p></div>';
-  COURSE_DATA.bonuses.forEach(function(b){
-    h+='<div class="bcard" onclick="window.open(\''+b.url+'\',\'_blank\')"><div class="bico">'+b.icon+'</div><div class="binfo"><h3>'+b.title+'</h3><p>'+b.desc+'</p></div></div>';
+  COURSE_DATA.bonuses.forEach(function(b,i){
+    h+='<div class="bcard" onclick="openBonus('+i+')">'
+      +'<div class="bico">'+b.icon+'</div>'
+      +'<div class="binfo"><h3>'+b.title+'</h3><p>'+b.desc+'</p></div>'
+      +'<div class="barrow">▶</div>'
+      +'</div>';
   });
   document.getElementById('s-bonus').innerHTML=h;
 }
 
-// TOOLS
+function openBonus(i){
+  var b=COURSE_DATA.bonuses[i];
+  openPlayer(b.topics, 0, 'БОНУС '+(i+1), function(){ goTab('bonus'); });
+}
+
+// ── TOOLS ────────────────────────────────────────────
 function buildTools(){
-  var h='<div class="hdr"><h1>Инструменты</h1><p>Менеджмент практикум</p></div><div class="tintro"><p>Записи практических занятий по инструментам менеджмента.</p></div>';
-  COURSE_DATA.tools.forEach(function(t){
-    h+='<button class="tbtn" onclick="window.open(\''+t.url+'\',\'_blank\')">'+t.title+'</button>';
+  var h='<div class="hdr"><h1>Инструменты</h1><p>Менеджмент практикум</p></div>';
+  COURSE_DATA.tools.forEach(function(t,i){
+    h+='<div class="bcard" onclick="openTool('+i+')">'
+      +'<div class="bico">'+t.icon+'</div>'
+      +'<div class="binfo"><h3>'+t.title+'</h3><p>'+t.desc+'</p></div>'
+      +'<div class="barrow">▶</div>'
+      +'</div>';
   });
   document.getElementById('s-tools').innerHTML=h;
 }
 
-buildHome();buildBonus();buildTools();
+function openTool(i){
+  var t=COURSE_DATA.tools[i];
+  openPlayer(t.topics, 0, t.title.toUpperCase(), function(){ goTab('tools'); });
+}
+
+buildHome(); buildBonus(); buildTools();
 </script>
 </body>
 </html>
