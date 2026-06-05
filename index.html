@@ -8,15 +8,12 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#0f0f0f;--sur:#1a1a1a;--sur2:#242424;--acc:#f5c518;--tx:#fff;--tx2:#888;--r:12px}
 body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
-
 .nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--sur);border-top:1px solid #2a2a2a;z-index:200}
 .ni{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 14px;cursor:pointer;color:var(--tx2);font-size:11px}
 .ni.on{color:var(--acc)}
 .ni i{font-size:22px;font-style:normal}
-
 .sc{display:none;padding:16px 16px 80px}
 .sc.on{display:block}
-
 .hdr{padding:20px 0 8px}
 .hdr h1{font-size:26px;font-weight:700}
 .hdr p{color:var(--tx2);font-size:14px;margin-top:4px}
@@ -27,102 +24,50 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .dcard .n{font-size:28px;font-weight:800;color:var(--acc)}
 .dcard .l{font-size:13px;color:var(--tx2);margin-top:4px}
 .dcard .c{font-size:11px;color:#555;margin-top:8px}
-
 .back{color:var(--acc);font-size:15px;cursor:pointer;margin-bottom:16px;display:inline-block}
 .tlist{display:flex;flex-direction:column;gap:8px}
 .titem{background:var(--sur);border-radius:var(--r);padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1px solid #2a2a2a}
 .titem:active{background:var(--sur2)}
 .tnum{width:28px;height:28px;border-radius:50%;background:var(--acc);color:#000;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tname{font-size:14px;line-height:1.4}
-
 .pbadge{background:var(--acc);color:#000;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-block}
 .pcnt{color:var(--tx2);font-size:13px;display:inline-block;margin-left:8px}
 
-/* VIDEO */
-.vwrap{position:relative;width:100%;background:#000;border-radius:var(--r);overflow:hidden;margin-top:12px}
+/* Экран плеера — фиксированная структура, НЕ пересоздаётся */
+#s-player{display:none;flex-direction:column;padding:16px 16px 80px}
+#s-player.on{display:flex}
+
+.vwrap{position:relative;width:100%;background:#000;border-radius:var(--r);overflow:hidden;margin-top:12px;flex-shrink:0}
 .vwrap iframe{display:block;width:100%;aspect-ratio:16/9;border:none;pointer-events:none}
 .ytop{position:absolute;top:0;left:0;right:0;height:60px;background:#000;z-index:11}
 .ybot{position:absolute;bottom:0;left:0;right:0;height:50px;background:#000;z-index:11}
 .ytap{position:absolute;inset:0;z-index:12;cursor:pointer}
-
-/* CONTROLS — iPhone style */
-.ctrl{
-  position:absolute;inset:0;z-index:20;
-  display:flex;flex-direction:column;
-  justify-content:flex-end;
-  background:linear-gradient(transparent 40%, rgba(0,0,0,.7) 100%);
-  transition:opacity .3s;
-  pointer-events:none;
-}
-.ctrl.hide{opacity:0}
-.ctrl.hide .cbtn{pointer-events:none}
-.ctrl.show .cbtn{pointer-events:all}
-.ctrl.show{opacity:1}
-
-/* Центральные кнопки — iPhone стиль */
-.center-row{
-  display:flex;align-items:center;justify-content:center;
-  gap:40px;
-  position:absolute;
-  top:50%;left:0;right:0;
-  transform:translateY(-50%);
-  pointer-events:none;
-}
-.ctrl.show .center-row{pointer-events:all}
-
-/* Кнопка перемотки — как на iPhone */
-.rbtn{
-  width:50px;height:50px;
-  background:none;border:none;
-  color:#fff;cursor:pointer;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:2px;
-  opacity:.9;
-}
-.rbtn svg{width:36px;height:36px;fill:#fff}
-.rbtn span{font-size:10px;color:#fff;font-weight:600;margin-top:1px}
-
-/* Большая кнопка Play/Pause */
-.playbtn{
-  width:64px;height:64px;
-  background:rgba(255,255,255,.15);
-  backdrop-filter:blur(4px);
-  border:2px solid rgba(255,255,255,.4);
-  border-radius:50%;
-  color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-}
-.playbtn svg{width:32px;height:32px;fill:#fff}
-
-/* Нижняя полоса */
-.bottom-bar{padding:8px 14px 12px;pointer-events:none}
-.ctrl.show .bottom-bar{pointer-events:all}
+.ctrl{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(transparent 35%,rgba(0,0,0,.75) 100%);transition:opacity .3s;opacity:0;pointer-events:none}
+.ctrl.show{opacity:1;pointer-events:all}
+.center-row{display:flex;align-items:center;justify-content:center;gap:44px;position:absolute;top:50%;left:0;right:0;transform:translateY(-50%)}
+.rbtn{width:54px;height:54px;background:none;border:none;color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.rbtn svg{width:38px;height:38px;fill:#fff;opacity:.9}
+.rbtn span{font-size:10px;color:#fff;font-weight:700}
+.playbtn{width:66px;height:66px;background:rgba(255,255,255,.18);backdrop-filter:blur(6px);border:2px solid rgba(255,255,255,.5);border-radius:50%;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.playbtn svg{width:34px;height:34px;fill:#fff}
+.bottom-bar{padding:8px 14px 12px}
 .pbar{width:100%;height:4px;background:rgba(255,255,255,.25);border-radius:2px;cursor:pointer;margin-bottom:8px}
-.pfill{height:100%;background:var(--acc);border-radius:2px;width:0%;pointer-events:none}
+.pfill{height:100%;background:var(--acc);border-radius:2px;width:0%}
 .time-row{display:flex;align-items:center;justify-content:space-between}
 .tdisp{font-size:12px;color:rgba(255,255,255,.8);font-variant-numeric:tabular-nums}
 .fsbtn{background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center}
 .fsbtn svg{width:20px;height:20px;fill:#fff}
-
-/* FULLSCREEN */
 .vwrap.fs{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;z-index:9999;border-radius:0;margin:0}
 .vwrap.fs iframe{width:100vw!important;height:100vh!important;aspect-ratio:unset!important}
-
-.tlabel{font-size:12px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin-top:14px}
-.ttitle{font-size:18px;font-weight:700;margin-top:4px;line-height:1.3}
-
+#p-label{font-size:12px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin-top:14px}
+#p-title{font-size:18px;font-weight:700;margin-top:4px;line-height:1.3}
 .nbwrap{display:flex;gap:10px;margin-top:16px}
 .nbtn{flex:1;padding:13px;border-radius:var(--r);border:1px solid #2a2a2a;background:var(--sur);color:var(--tx);font-size:14px;cursor:pointer;text-align:center}
 .nbtn:disabled{opacity:.3;cursor:default;pointer-events:none}
 .nbtn.nx{background:var(--acc);color:#000;font-weight:600;border-color:var(--acc)}
-
 .bcard{background:var(--sur);border-radius:var(--r);padding:16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:14px;border:1px solid #2a2a2a}
 .bcard:active{background:var(--sur2)}
-.bico{font-size:32px}
-.binfo h3{font-size:15px;font-weight:600}
-.binfo p{color:var(--tx2);font-size:13px;margin-top:3px}
-
+.bico{font-size:32px}.binfo h3{font-size:15px;font-weight:600}.binfo p{color:var(--tx2);font-size:13px;margin-top:3px}
 .tintro{background:var(--sur);border-radius:var(--r);padding:16px;margin-bottom:16px;border:1px solid #2a2a2a}
 .tintro p{color:var(--tx2);font-size:14px;line-height:1.5}
 .tbtn{display:block;width:100%;padding:16px;background:var(--acc);color:#000;font-size:15px;font-weight:700;border:none;border-radius:var(--r);cursor:pointer;text-align:center;margin-bottom:10px}
@@ -132,7 +77,49 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 <div id="s-home" class="sc on"></div>
 <div id="s-days" class="sc"></div>
-<div id="s-player" class="sc"></div>
+
+<!-- ПЛЕЕР — фиксированная структура, создаётся один раз -->
+<div id="s-player">
+  <div id="p-back" class="back">← Назад</div>
+  <div id="p-header" style="margin-bottom:12px"></div>
+  <div class="vwrap" id="vw">
+    <div id="ytpl"></div>
+    <div class="ytop"></div>
+    <div class="ybot"></div>
+    <div class="ytap" onclick="showCtrl()"></div>
+    <div class="ctrl" id="ctrl">
+      <div class="center-row">
+        <button class="rbtn" onclick="doSeek(-15);event.stopPropagation()">
+          <svg><use href="#i-rew"/></svg><span>15</span>
+        </button>
+        <button class="playbtn" id="pb" onclick="doPlay();event.stopPropagation()">
+          <svg><use href="#i-play"/></svg>
+        </button>
+        <button class="rbtn" onclick="doSeek(15);event.stopPropagation()">
+          <svg><use href="#i-fwd"/></svg><span>15</span>
+        </button>
+      </div>
+      <div class="bottom-bar">
+        <div class="pbar" onclick="clickBar(event);event.stopPropagation()">
+          <div class="pfill" id="pf"></div>
+        </div>
+        <div class="time-row">
+          <span class="tdisp"><span id="tc">0:00</span> / <span id="td">0:00</span></span>
+          <button class="fsbtn" id="fsb" onclick="doFS();event.stopPropagation()">
+            <svg><use href="#i-fs"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="p-label"></div>
+  <div id="p-title"></div>
+  <div class="nbwrap">
+    <button class="nbtn" id="btn-prev" onclick="goPrev()">← Предыдущее</button>
+    <button class="nbtn nx" id="btn-next" onclick="goNext()">Следующее →</button>
+  </div>
+</div>
+
 <div id="s-bonus" class="sc"></div>
 <div id="s-tools" class="sc"></div>
 
@@ -153,52 +140,72 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 
 <script src="data.js"></script>
 <script>
-var G = { day:null, idx:0, player:null, ready:false, playing:false, fs:false, ctrlTimer:null, progTimer:null };
+var G={day:null,idx:0,player:null,ready:false,playing:false,fs:false,ctrlTimer:null,progTimer:null,ytReady:false};
 
 // YouTube API
-var t = document.createElement('script');
-t.src = 'https://www.youtube.com/iframe_api';
-document.head.appendChild(t);
-function onYouTubeIframeAPIReady(){}
+(function(){var t=document.createElement('script');t.src='https://www.youtube.com/iframe_api';document.head.appendChild(t);})();
 
-function makePlayer(vid) {
-  if (G.player) { try{G.player.destroy();}catch(e){} }
-  G.player=null; G.ready=false; G.playing=false;
-  clearInterval(G.progTimer);
-  syncPB();
-
-  G.player = new YT.Player('ytpl', {
-    videoId: vid,
-    playerVars: {autoplay:1,controls:0,disablekb:1,fs:0,modestbranding:1,rel:0,showinfo:0,iv_load_policy:3,playsinline:1,enablejsapi:1},
-    events: {
-      onReady: function(e) {
-        G.ready=true; e.target.playVideo(); G.playing=true; syncPB(); startProg(); showCtrl();
+function onYouTubeIframeAPIReady(){
+  G.ytReady=true;
+  // Создаём плеер один раз — он будет жить всё время
+  G.player=new YT.Player('ytpl',{
+    playerVars:{controls:0,disablekb:1,fs:0,modestbranding:1,rel:0,showinfo:0,iv_load_policy:3,playsinline:1,enablejsapi:1},
+    events:{
+      onReady:function(){
+        // Плеер готов, если есть pendingVid — загружаем
+        if(G.pendingVid){
+          G.player.loadVideoById(G.pendingVid);
+          G.pendingVid=null;
+        }
       },
-      onStateChange: function(e) {
+      onStateChange:function(e){
         G.playing=(e.data===YT.PlayerState.PLAYING);
-        if(G.playing) startProg(); else clearInterval(G.progTimer);
+        if(G.playing){G.ready=true;startProg();}else{clearInterval(G.progTimer);}
         syncPB();
       }
     }
   });
 }
 
-function doPlay() { if(!G.ready)return; G.playing?G.player.pauseVideo():G.player.playVideo(); }
-function doSeek(d) { if(!G.ready)return; G.player.seekTo(Math.max(0,G.player.getCurrentTime()+d),true); }
-
-function startProg() {
+// Загружаем новое видео в существующий плеер
+function loadVideo(vid){
   clearInterval(G.progTimer);
-  G.progTimer = setInterval(function(){
-    if(!G.ready)return;
+  G.ready=false; G.playing=false;
+  syncPB();
+  // Сброс прогресса
+  var pf=document.getElementById('pf');if(pf)pf.style.width='0%';
+  var tc=document.getElementById('tc');if(tc)tc.textContent='0:00';
+  var td=document.getElementById('td');if(td)td.textContent='0:00';
+
+  if(G.ytReady && G.player && typeof G.player.loadVideoById==='function'){
+    G.player.loadVideoById(vid);
+    G.ready=true;
+    showCtrl();
+  } else {
+    G.pendingVid=vid;
+  }
+}
+
+function doPlay(){
+  if(!G.player||!G.ytReady)return;
+  try{G.playing?G.player.pauseVideo():G.player.playVideo();}catch(e){}
+}
+
+function doSeek(d){
+  if(!G.player||!G.ytReady)return;
+  try{G.player.seekTo(Math.max(0,G.player.getCurrentTime()+d),true);}catch(e){}
+}
+
+function startProg(){
+  clearInterval(G.progTimer);
+  G.progTimer=setInterval(function(){
+    if(!G.player||!G.ytReady)return;
     try{
-      var cur=G.player.getCurrentTime(), dur=G.player.getDuration();
+      var cur=G.player.getCurrentTime(),dur=G.player.getDuration();
       if(!dur)return;
-      var pf=document.getElementById('pf');
-      var tc=document.getElementById('tc');
-      var td=document.getElementById('td');
-      if(pf) pf.style.width=(cur/dur*100)+'%';
-      if(tc) tc.textContent=fmt(cur);
-      if(td) td.textContent=fmt(dur);
+      var pf=document.getElementById('pf');if(pf)pf.style.width=(cur/dur*100)+'%';
+      var tc=document.getElementById('tc');if(tc)tc.textContent=fmt(cur);
+      var td=document.getElementById('td');if(td)td.textContent=fmt(dur);
     }catch(e){}
   },500);
 }
@@ -206,75 +213,56 @@ function startProg() {
 function fmt(s){s=Math.floor(s||0);return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);}
 
 function syncPB(){
-  var b=document.getElementById('pb');
-  if(!b)return;
+  var b=document.getElementById('pb');if(!b)return;
   b.innerHTML=G.playing?'<svg><use href="#i-pause"/></svg>':'<svg><use href="#i-play"/></svg>';
 }
 
 function clickBar(e){
-  if(!G.ready)return;
-  var r=e.currentTarget.getBoundingClientRect();
-  G.player.seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*G.player.getDuration(),true);
+  if(!G.player||!G.ytReady)return;
+  try{
+    var r=e.currentTarget.getBoundingClientRect();
+    G.player.seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*G.player.getDuration(),true);
+  }catch(e){}
 }
 
-// FULLSCREEN
 function doFS(){
-  var w=document.getElementById('vw');
-  if(!w)return;
+  var w=document.getElementById('vw');if(!w)return;
   var req=w.requestFullscreen||w.webkitRequestFullscreen;
   var fsEl=document.fullscreenElement||document.webkitFullscreenElement;
-  if(fsEl){
-    var ex=document.exitFullscreen||document.webkitExitFullscreen;
-    if(ex)ex.call(document);
-  } else if(req){
-    req.call(w).then(function(){G.fs=true;syncFS();}).catch(function(){cssFS(w);});
-  } else {
-    cssFS(w);
-  }
+  if(fsEl){(document.exitFullscreen||document.webkitExitFullscreen).call(document);}
+  else if(req){req.call(w).then(function(){G.fs=true;syncFS();}).catch(function(){cssFS(w);});}
+  else{cssFS(w);}
 }
 function cssFS(w){
-  G.fs=!G.fs;
-  w.classList.toggle('fs',G.fs);
-  document.body.style.overflow=G.fs?'hidden':'';
-  var iframe=w.querySelector('iframe');
-  if(iframe){
-    iframe.style.cssText=G.fs?'width:100vw!important;height:100vh!important;aspect-ratio:unset!important':'';
-  }
+  G.fs=!G.fs;w.classList.toggle('fs',G.fs);document.body.style.overflow=G.fs?'hidden':'';
+  var f=w.querySelector('iframe');
+  if(f)f.style.cssText=G.fs?'width:100vw!important;height:100vh!important;aspect-ratio:unset!important':'';
   syncFS();
 }
-function syncFS(){
-  var b=document.getElementById('fsb');
-  if(!b)return;
-  b.innerHTML=G.fs?'<svg><use href="#i-xfs"/></svg>':'<svg><use href="#i-fs"/></svg>';
-}
+function syncFS(){var b=document.getElementById('fsb');if(!b)return;b.innerHTML=G.fs?'<svg><use href="#i-xfs"/></svg>':'<svg><use href="#i-fs"/></svg>';}
 document.addEventListener('fullscreenchange',function(){if(!document.fullscreenElement){G.fs=false;syncFS();}});
 document.addEventListener('webkitfullscreenchange',function(){if(!document.webkitFullscreenElement){G.fs=false;syncFS();}});
 
-// CONTROLS
 function showCtrl(){
-  var c=document.getElementById('ctrl');
-  if(!c)return;
-  c.classList.remove('hide');
+  var c=document.getElementById('ctrl');if(!c)return;
   c.classList.add('show');
   clearTimeout(G.ctrlTimer);
-  G.ctrlTimer=setTimeout(function(){
-    if(G.playing){c.classList.add('hide');c.classList.remove('show');}
-  },3500);
+  G.ctrlTimer=setTimeout(function(){if(G.playing)c.classList.remove('show');},3500);
 }
 
-function stopAll(){
+function stopVideo(){
   clearInterval(G.progTimer);clearTimeout(G.ctrlTimer);
-  if(G.player&&G.ready){try{G.player.stopVideo();}catch(e){}}
-  if(G.fs){var w=document.getElementById('vw');if(w)cssFS(w);}
+  if(G.player&&G.ytReady){try{G.player.stopVideo();}catch(e){}}
+  G.playing=false;syncPB();
 }
 
 // TABS
 function goTab(t){
-  document.querySelectorAll('.sc').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
-  document.getElementById('s-'+t).classList.add('on');
-  document.getElementById('n-'+t).classList.add('on');
-  if(t!=='player') stopAll();
+  var el=document.getElementById('s-'+t);if(el)el.classList.add('on');
+  var ni=document.getElementById('n-'+t);if(ni)ni.classList.add('on');
+  if(t!=='player')stopVideo();
 }
 
 // HOME
@@ -283,8 +271,7 @@ function buildHome(){
   COURSE_DATA.days.forEach(function(d){
     h+='<div class="dcard" onclick="openDay('+d.id+')"><div class="n">'+d.id+'</div><div class="l">'+d.title+'</div><div class="c">'+d.topics.length+' тем</div></div>';
   });
-  h+='</div>';
-  document.getElementById('s-home').innerHTML=h;
+  document.getElementById('s-home').innerHTML=h+'</div>';
 }
 
 // DAY
@@ -293,101 +280,64 @@ function openDay(id){
   if(!G.day)return;
   var h='<div class="back" onclick="goHome()">← Назад</div>'
     +'<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">День '+G.day.id+'</div>'
-    +'<div style="color:var(--tx2);font-size:13px;margin-top:4px">'+G.day.title+'</div></div>'
-    +'<div class="tlist">';
+    +'<div style="color:var(--tx2);font-size:13px;margin-top:4px">'+G.day.title+'</div></div><div class="tlist">';
   G.day.topics.forEach(function(tp,i){
     h+='<div class="titem" onclick="openPlayer('+i+')"><div class="tnum">'+(i+1)+'</div><div class="tname">'+tp.title+'</div></div>';
   });
-  h+='</div>';
-  document.getElementById('s-days').innerHTML=h;
-  document.querySelectorAll('.sc').forEach(function(s){s.classList.remove('on');});
+  document.getElementById('s-days').innerHTML=h+'</div>';
+  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
   document.getElementById('s-days').classList.add('on');
   document.getElementById('n-home').classList.add('on');
 }
 
 function goHome(){
-  stopAll();
-  document.querySelectorAll('.sc').forEach(function(s){s.classList.remove('on');});
+  stopVideo();
+  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
   document.getElementById('s-home').classList.add('on');
   document.getElementById('n-home').classList.add('on');
 }
 
-// PLAYER
+// PLAYER — только обновляем данные, структура DOM не меняется
 function openPlayer(idx){
   if(!G.day)return;
-  G.idx=idx; // сохраняем ПЕРВЫМ
-  var tp=G.day.topics[idx];
+  G.idx=idx;
+  var tp=G.day.topics[G.idx];
   var total=G.day.topics.length;
   var vid=getVid(tp.url);
 
-  var h='<div class="back" onclick="openDay('+G.day.id+')">← День '+G.day.id+'</div>'
-    +'<div style="margin-bottom:12px"><span class="pbadge">ДЕНЬ '+G.day.id+'</span><span class="pcnt">'+(idx+1)+' из '+total+'</span></div>'
+  // Обновляем только текстовые данные
+  document.getElementById('p-back').onclick=function(){openDay(G.day.id);};
+  document.getElementById('p-header').innerHTML='<span class="pbadge">ДЕНЬ '+G.day.id+'</span><span class="pcnt">'+(G.idx+1)+' из '+total+'</span>';
+  document.getElementById('p-label').className='';
+  document.getElementById('p-label').style.cssText='font-size:12px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin-top:14px';
+  document.getElementById('p-label').textContent='День '+G.day.id+' — Тема '+(G.idx+1);
+  document.getElementById('p-title').style.cssText='font-size:18px;font-weight:700;margin-top:4px;line-height:1.3';
+  document.getElementById('p-title').textContent=tp.title;
 
-    // VIDEO
-    +'<div class="vwrap" id="vw">'
-    +'<div id="ytpl"></div>'
-    +'<div class="ytop"></div>'
-    +'<div class="ybot"></div>'
-    +'<div class="ytap" onclick="showCtrl()"></div>'
+  // Кнопки навигации
+  var bp=document.getElementById('btn-prev');
+  var bn=document.getElementById('btn-next');
+  bp.disabled=(G.idx===0);
+  bn.disabled=(G.idx===total-1);
 
-    // CONTROLS
-    +'<div class="ctrl hide" id="ctrl">'
-
-    // Центральные кнопки — iPhone стиль
-    +'<div class="center-row">'
-    +'<button class="rbtn" onclick="doSeek(-15);event.stopPropagation()">'
-    +'<svg><use href="#i-rew"/></svg>'
-    +'<span>15</span>'
-    +'</button>'
-    +'<button class="playbtn" id="pb" onclick="doPlay();event.stopPropagation()">'
-    +'<svg><use href="#i-play"/></svg>'
-    +'</button>'
-    +'<button class="rbtn" onclick="doSeek(15);event.stopPropagation()">'
-    +'<svg><use href="#i-fwd"/></svg>'
-    +'<span>15</span>'
-    +'</button>'
-    +'</div>'
-
-    // Нижняя полоса
-    +'<div class="bottom-bar">'
-    +'<div class="pbar" onclick="clickBar(event);event.stopPropagation()">'
-    +'<div class="pfill" id="pf"></div>'
-    +'</div>'
-    +'<div class="time-row">'
-    +'<span class="tdisp"><span id="tc">0:00</span> / <span id="td">0:00</span></span>'
-    +'<button class="fsbtn" id="fsb" onclick="doFS();event.stopPropagation()"><svg><use href="#i-fs"/></svg></button>'
-    +'</div>'
-    +'</div>'
-    +'</div>'
-    +'</div>'
-
-    // INFO
-    +'<div class="tlabel">День '+G.day.id+' — Тема '+(idx+1)+'</div>'
-    +'<div class="ttitle">'+tp.title+'</div>'
-
-    // NAV BUTTONS
-    +'<div class="nbwrap">'
-    +'<button class="nbtn" '+(idx===0?'disabled':'')+' onclick="goPrev()">← Предыдущее</button>'
-    +'<button class="nbtn nx" '+(idx===total-1?'disabled':'')+' onclick="goNext()">Следующее →</button>'
-    +'</div>';
-
-  document.getElementById('s-player').innerHTML=h;
-  document.querySelectorAll('.sc').forEach(function(s){s.classList.remove('on');});
-  document.getElementById('s-player').classList.add('on');
+  // Показываем экран плеера
+  document.querySelectorAll('.sc, #s-player').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
+  document.getElementById('s-player').classList.add('on');
   document.getElementById('n-home').classList.add('on');
 
-  setTimeout(function(){makePlayer(vid);},200);
+  // Загружаем видео
+  loadVideo(vid);
 }
 
-// ВАЖНО: goPrev/goNext читают G.idx который уже обновлён
-function goPrev(){ if(G.day && G.idx>0) openPlayer(G.idx-1); }
-function goNext(){ if(G.day && G.idx<G.day.topics.length-1) openPlayer(G.idx+1); }
+// Навигация — простые функции
+function goPrev(){if(G.day&&G.idx>0)openPlayer(G.idx-1);}
+function goNext(){if(G.day&&G.idx<G.day.topics.length-1)openPlayer(G.idx+1);}
 
 function getVid(url){
-  if(!url)return '';
+  if(!url)return'';
   var m=url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([^&?/]{11})/);
   return m?m[1]:'';
 }
@@ -410,7 +360,7 @@ function buildTools(){
   document.getElementById('s-tools').innerHTML=h;
 }
 
-buildHome(); buildBonus(); buildTools();
+buildHome();buildBonus();buildTools();
 </script>
 </body>
 </html>
