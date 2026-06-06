@@ -90,7 +90,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
     <div class="ytop"></div>
     <div class="ybot"></div>
     <div class="ytap" onclick="tapVideo()"></div>
-    <div class="ctrl" id="ctrl">
+    <div class="ctrl" id="ctrl" onclick="if(G.playing)hideCtrl()">
       <div class="center-row">
         <button class="rbtn" onclick="doSeek(-15);event.stopPropagation()"><svg><use href="#i-rew"/></svg><span>15</span></button>
         <button class="playbtn" id="pb" onclick="doPlay();event.stopPropagation()"><svg><use href="#i-play"/></svg></button>
@@ -240,7 +240,7 @@ function showCtrl(autoHide){
 }
 function hideCtrl(){var c=document.getElementById('ctrl');if(!c)return;clearTimeout(G.ctrlTimer);c.classList.remove('show');}
 function scheduleHide(){clearTimeout(G.ctrlTimer);G.ctrlTimer=setTimeout(function(){if(G.playing)hideCtrl();},3500);}
-function tapVideo(){var c=document.getElementById('ctrl');if(!c)return;if(c.classList.contains('show')){if(G.playing)hideCtrl();}else{showCtrl(true);}}
+function tapVideo(){var c=document.getElementById("ctrl");if(!c)return;if(c.classList.contains("show")){hideCtrl();}else{showCtrl(true);}}
 
 function doFS(){
   var w=document.getElementById('vw');if(!w)return;
