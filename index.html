@@ -412,7 +412,12 @@ function buildTools(){
 
 function openTool(i){
   var t=COURSE_DATA.tools[i];
-  openPlayer(t.topics,0,t.title.toUpperCase(),function(){goTab('tools');});
+  // Инструменты — открываем плейлист в Telegram браузере
+  if(t.playlistUrl){
+    window.open(t.playlistUrl,'_blank');
+  } else if(t.topics && t.topics.length>0){
+    openPlayer(t.topics,0,t.title.toUpperCase(),function(){goTab('tools');});
+  }
 }
 
 buildHome();buildBonus();buildTools();
