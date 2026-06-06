@@ -4,15 +4,15 @@ const COURSE_DATA = {
       id: 1,
       title: "День 1",
       topics: [
-        { title: "Приветствие, знакомство, регламент", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Александр Высоцкий — биография", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "О бизнес-бустере — программа 6 дней", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Три роли владельца-директора", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Функции владельца бизнеса", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Пять стадий развития бизнеса", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Проблемы ручного управления", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Примеры Nintendo Kodak Apple", url: "https://youtu.be/ukzQhD77DAM" },
-        { title: "Партнерство — ошибки совладельцев", url: "https://youtu.be/ukzQhD77DAM" },
+        { title: "Приветствие, знакомство, регламент", url: "https://youtu.be/mElDPLvyq2k" },
+        { title: "Александр Высоцкий — биография", url: "https://youtu.be/IEisBKPgzck" },
+        { title: "О бизнес-бустере — программа 6 дней", url: "https://youtu.be/SLWV0-8YyPE" },
+        { title: "Три роли владельца-директора", url: "https://youtu.be/TS1ShxFT8ic" },
+        { title: "Функции владельца бизнеса", url: "https://youtu.be/AP78Y6CJ66A" },
+        { title: "Пять стадий развития бизнеса", url: "https://youtu.be/zxqBDzs__qg" },
+        { title: "Проблемы ручного управления", url: "https://youtu.be/KBrNhLpGOfA" },
+        { title: "Примеры Nintendo Kodak Apple", url: "https://youtu.be/-fnKYgaVgVU" },
+        { title: "Партнерство — ошибки совладельцев", url: "https://youtu.be/FQ9TWTm7a8k" },
         { title: "Оргструктура задание QnA", url: "https://youtu.be/ukzQhD77DAM" },
       ]
     },
@@ -115,7 +115,6 @@ const COURSE_DATA = {
     },
   ],
 
-  // Бонусы — такая же структура как дни, открываются в плеере
   bonuses: [
     {
       id: "b1",
@@ -123,7 +122,7 @@ const COURSE_DATA = {
       title: "Бонус 1 — Копирайтинг",
       desc: "Копирайтинг и маркетинг-кит",
       topics: [
-        { title: "Копирайтинг и маркетинг-кит (полное видео)", url: "https://youtu.be/AsejKTiYFYM" }
+        { title: "Копирайтинг и маркетинг-кит", url: "https://youtu.be/AsejKTiYFYM" }
       ]
     },
     {
@@ -132,7 +131,7 @@ const COURSE_DATA = {
       title: "Бонус 2 — Стратегия",
       desc: "Стратегическое планирование",
       topics: [
-        { title: "Стратегическое планирование (полное видео)", url: "https://youtu.be/keG9VwXk0yE" }
+        { title: "Стратегическое планирование", url: "https://youtu.be/keG9VwXk0yE" }
       ]
     },
     {
@@ -141,29 +140,28 @@ const COURSE_DATA = {
       title: "Бонус 3 — Личный бренд",
       desc: "Личный бренд и сообщества",
       topics: [
-        { title: "Личный бренд и сообщества (полное видео)", url: "https://youtu.be/rOscryWi75I" }
+        { title: "Личный бренд и сообщества", url: "https://youtu.be/rOscryWi75I" }
       ]
     },
   ],
 
-  // Инструменты — тоже открываются в плеере через плейлист
   tools: [
     {
       id: "t2026",
       icon: "🛠",
-      title: "Инструменты менеджмента 2026",
+      title: "Инструменты 2026",
       desc: "30 практических занятий",
       topics: [
-        { title: "Инструменты менеджмента 2026 (плейлист)", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
+        { title: "Инструменты менеджмента 2026", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
       ]
     },
     {
       id: "t2025",
       icon: "📋",
-      title: "Инструменты менеджмента 2025",
+      title: "Инструменты 2025",
       desc: "88 практических занятий",
       topics: [
-        { title: "Инструменты менеджмента 2025 (плейлист)", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
+        { title: "Инструменты менеджмента 2025", url: "https://www.youtube.com/playlist?list=PLuHIwD8UzKjyDvo1I992H57blcW6U2vR1" }
       ]
     },
   ]
