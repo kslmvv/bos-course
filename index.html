@@ -330,6 +330,8 @@ function openPlayer(topics,idx,badgeText,backFn,startPos){
   document.getElementById('s-player').classList.add('on');
   // Сохраняем (без позиции — начало новой темы)
   if(!startPos) saveProgress();
+  // Трекинг просмотра
+  trackView(badgeText, idx, tp.title);
   loadVideo(vid, startPos||0);
 }
 
@@ -485,6 +487,33 @@ window.addEventListener('resize', function(){
     if(w) applyFsSize(w);
   }
 });
+
+// ── ТРЕКИНГ ПРОСМОТРОВ ────────────────────────────────
+function trackView(badgeText, idx, title) {
+  try {
+    // Сохраняем в localStorage
+    var STATS_KEY = 'bos_stats';
+    var stats = JSON.parse(localStorage.getItem(STATS_KEY) || '{"watched":[],"last_title":"","last_date":""}');
+    var entry = badgeText + ' — Тема ' + (idx+1) + ': ' + title;
+    // Не дублируем
+    if (stats.watched.indexOf(entry) === -1) {
+      stats.watched.push(entry);
+    }
+    stats.last_title = entry;
+    stats.last_date = new Date().toLocaleDateString('ru-RU');
+    stats.total = stats.watched.length;
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+
+    // Отправляем боту через Telegram WebApp если доступно
+    if (window.Telegram && window.Telegram.WebApp) {
+      var tg = window.Telegram.WebApp;
+      // Используем CloudStorage если доступен (не закрывает WebApp)
+      if (tg.CloudStorage) {
+        tg.CloudStorage.setItem('bos_stats', JSON.stringify(stats));
+      }
+    }
+  } catch(e) {}
+}
 
 buildHome();buildBonus();buildTools();
 </script>
