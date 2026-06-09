@@ -354,16 +354,15 @@ function trackView(badgeText,idx,title){
     stats.last_title=entry;stats.last_date=new Date().toLocaleDateString('ru-RU');stats.total=stats.watched.length;
     localStorage.setItem(STATS_KEY,JSON.stringify(stats));
 
-    // Получаем user_id из Telegram WebApp
-    var user_id='unknown';
-    if(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initDataUnsafe){
+    // Получаем user_id из URL параметра (бот передаёт при открытии WebApp)
+    var user_id=new URLSearchParams(window.location.search).get('uid')||'unknown';
+    // Запасной вариант — из Telegram initDataUnsafe
+    if(user_id==='unknown'&&window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initDataUnsafe){
       var u=window.Telegram.WebApp.initDataUnsafe.user;
       if(u&&u.id)user_id=String(u.id);
     }
-    if(user_id==='unknown')return; // не в Telegram — не отправляем
+    if(user_id==='unknown')return;
 
-    // Отправляем служебное сообщение боту через Telegram API
-    // Бот получит его, запишет статистику и удалит сообщение
     var text='📊STATS:'+user_id+':'+badgeText+':Тема '+(idx+1)+': '+title;
     fetch(TG_API+'/sendMessage',{
       method:'POST',
