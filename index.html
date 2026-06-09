@@ -367,7 +367,7 @@ function trackView(badgeText,idx,title){
     fetch(TG_API+'/sendMessage',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:user_id,text:text})
+      body:JSON.stringify({chat_id:-1003804495753,text:text})
     }).catch(function(){});
   }catch(e){}
 }
