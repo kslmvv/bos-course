@@ -130,7 +130,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 </svg>
 <script src="data.js"></script>
 <script>
-var G={topics:[],idx:0,badgeText:'',backFn:null,player:null,ytReady:false,playing:false,ready:false,fs:false,pendingVid:null,pendingPos:0,ctrlTimer:null,progTimer:null,saveTimer:null};
+var G={topics:[],idx:0,badgeText:'',backFn:null,player:null,ytReady:false,playing:false,ready:false,fs:false,pendingVid:null,pendingPos:0,ctrlTimer:null,progTimer:null,saveTimer:null,dayVideoUrl:null};
 
 var SAVE_KEY='bos_progress';
 var BOT_TOKEN='8928541148:AAFt7QwvCYTxjP-9QVmFWHXbNB2Jp81sChs'; // sender bot
@@ -240,9 +240,11 @@ function stopVideo(){
   G.playing=false;syncPB();hideCtrl();
 }
 
-function openPlayer(topics,idx,badgeText,backFn,startPos){
+function openPlayer(topics,idx,badgeText,backFn,startPos,dayVideoUrl){
   G.topics=topics;G.idx=idx;G.badgeText=badgeText;G.backFn=backFn;
-  var tp=G.topics[G.idx];var total=G.topics.length;var vid=getVid(tp.url);
+  G.dayVideoUrl=dayVideoUrl||null;
+  var tp=G.topics[G.idx];var total=G.topics.length;
+  var vid=getVid(G.dayVideoUrl||tp.url||'');
   document.getElementById('p-back').onclick=G.backFn;
   document.getElementById('p-header').innerHTML='<span class="pbadge">'+G.badgeText+'</span><span class="pcnt">'+(G.idx+1)+' из '+total+'</span>';
   document.getElementById('p-label').textContent=G.badgeText+' — ТЕМА '+(G.idx+1);
@@ -256,11 +258,23 @@ function openPlayer(topics,idx,badgeText,backFn,startPos){
   document.getElementById('s-player').classList.add('on');
   if(!startPos)saveProgress();
   trackView(badgeText,idx,tp.title);
-  loadVideo(vid,startPos||0);
+  loadVideo(vid,startPos!==undefined?startPos:(tp.start||0));
 }
 
-function goPrev(){if(G.idx>0)openPlayer(G.topics,G.idx-1,G.badgeText,G.backFn);}
-function goNext(){if(G.idx<G.topics.length-1)openPlayer(G.topics,G.idx+1,G.badgeText,G.backFn);}
+function goPrev(){
+  if(G.idx>0){
+    var newIdx=G.idx-1;
+    var startPos=G.topics[newIdx].start||0;
+    openPlayer(G.topics,newIdx,G.badgeText,G.backFn,startPos,G.dayVideoUrl);
+  }
+}
+function goNext(){
+  if(G.idx<G.topics.length-1){
+    var newIdx=G.idx+1;
+    var startPos=G.topics[newIdx].start||0;
+    openPlayer(G.topics,newIdx,G.badgeText,G.backFn,startPos,G.dayVideoUrl);
+  }
+}
 
 function getVid(url){if(!url)return'';var m=url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([^&?/]{11})/);return m?m[1]:'';}
 
@@ -290,7 +304,9 @@ function buildHome(){
 function continueWatch(e){
   e.stopPropagation();var prog=loadProgress();if(!prog||!prog.dayId)return;
   var day=null;for(var i=0;i<COURSE_DATA.days.length;i++){if(COURSE_DATA.days[i].id===prog.dayId){day=COURSE_DATA.days[i];break;}}
-  if(!day)return;openPlayer(day.topics,prog.idx,'ДЕНЬ '+prog.dayId,function(){openDay(prog.dayId);},prog.pos||0);
+    if(!day)return;
+  var sp=prog.pos||day.topics[prog.idx].start||0;
+  openPlayer(day.topics,prog.idx,'ДЕНЬ '+prog.dayId,function(){openDay(prog.dayId);},sp,day.videoUrl||null);
 }
 function startNew(e){e.stopPropagation();clearProgress();buildHome();}
 
@@ -312,7 +328,9 @@ function openDay(id){
 }
 function openDayVideo(dayId,idx){
   var day=null;for(var i=0;i<COURSE_DATA.days.length;i++){if(COURSE_DATA.days[i].id===dayId){day=COURSE_DATA.days[i];break;}}
-  if(!day)return;openPlayer(day.topics,idx,'ДЕНЬ '+dayId,function(){openDay(dayId);});
+  if(!day)return;
+  var startPos=day.topics[idx].start||0;
+  openPlayer(day.topics,idx,'ДЕНЬ '+dayId,function(){openDay(dayId);},startPos,day.videoUrl||null);
 }
 function goHome(){
   stopVideo();
