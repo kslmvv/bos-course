@@ -78,6 +78,14 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .nbtn{flex:1;padding:13px;border-radius:var(--r);border:1px solid #2a2a2a;background:var(--sur);color:var(--tx);font-size:14px;cursor:pointer;text-align:center}
 .nbtn:disabled{opacity:.3;cursor:default;pointer-events:none}
 .nbtn.nx{background:var(--acc);color:#000;font-weight:600;border-color:var(--acc)}
+
+.topic-end{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:30;}
+.topic-end.show{display:flex;}
+.te-box{text-align:center;padding:24px;}
+.te-title{color:#fff;font-size:18px;font-weight:600;margin-bottom:16px;}
+.te-btn{display:block;width:220px;margin:8px auto;padding:12px 16px;border-radius:10px;border:none;font-size:15px;font-weight:600;cursor:pointer;}
+.te-repeat{background:#2a2a2a;color:#fff;}
+.te-next{background:#ffd60a;color:#000;}
 </style>
 </head>
 <body>
@@ -93,6 +101,13 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
     <div class="ytop"></div>
     <div class="ybot"></div>
     <div class="ytap" onclick="tapVideo()"></div>
+    <div class="topic-end" id="topic-end">
+      <div class="te-box">
+        <div class="te-title">Тема завершена</div>
+        <button class="te-btn te-repeat" onclick="repeatTopic()">↺ Повторить</button>
+        <button class="te-btn te-next" id="te-next" onclick="nextTopicFromEnd()">Следующая тема →</button>
+      </div>
+    </div>
     <div class="ctrl" id="ctrl" onclick="if(G.playing)hideCtrl()">
       <div class="center-row">
         <button class="rbtn" onclick="doSeek(-15);event.stopPropagation()"><svg><use href="#i-rew"/></svg><span>15</span></button>
@@ -130,7 +145,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 </svg>
 <script src="data.js"></script>
 <script>
-var G={topics:[],idx:0,badgeText:'',backFn:null,player:null,ytReady:false,playing:false,ready:false,fs:false,pendingVid:null,pendingPos:0,ctrlTimer:null,progTimer:null,saveTimer:null,dayVideoUrl:null};
+var G={topics:[],idx:0,badgeText:'',backFn:null,player:null,ytReady:false,playing:false,ready:false,fs:false,pendingVid:null,pendingPos:0,ctrlTimer:null,progTimer:null,saveTimer:null,dayVideoUrl:null,segStart:0,segEnd:0};
 
 var SAVE_KEY='bos_progress';
 var BOT_TOKEN='8928541148:AAFt7QwvCYTxjP-9QVmFWHXbNB2Jp81sChs'; // sender bot
@@ -176,7 +191,7 @@ function onYouTubeIframeAPIReady(){
 }
 
 function loadVideo(vid,startPos){
-  clearInterval(G.progTimer);G.ready=false;G.playing=false;syncPB();
+  clearInterval(G.progTimer);G.ready=false;G.playing=false;G.topicEndShown=false;syncPB();hideTopicEnd();
   var pf=document.getElementById('pf');if(pf)pf.style.width='0%';
   var tc=document.getElementById('tc');if(tc)tc.textContent='0:00';
   var td=document.getElementById('td');if(td)td.textContent='0:00';
@@ -195,18 +210,54 @@ function startProg(){
     try{
       var cur=G.player.getCurrentTime(),dur=G.player.getDuration();
       if(!dur)return;
-      var pf=document.getElementById('pf');if(pf)pf.style.width=(cur/dur*100)+'%';
-      var tc=document.getElementById('tc');if(tc)tc.textContent=fmt(cur);
-      var td=document.getElementById('td');if(td)td.textContent=fmt(dur);
+      var segStart=G.segStart||0;
+      var segEnd=(G.segEnd&&G.segEnd>segStart)?G.segEnd:dur;
+      var segDur=Math.max(1,segEnd-segStart);
+      var segCur=Math.max(0,Math.min(segDur,cur-segStart));
+      var pf=document.getElementById('pf');if(pf)pf.style.width=(segCur/segDur*100)+'%';
+      var tc=document.getElementById('tc');if(tc)tc.textContent=fmt(segCur);
+      var td=document.getElementById('td');if(td)td.textContent=fmt(segDur);
+      if(G.segEnd&&cur>=G.segEnd-0.4&&!G.topicEndShown){
+        G.topicEndShown=true;
+        showTopicEnd();
+      }
     }catch(e){}
   },500);
+}
+function hideTopicEnd(){
+  var o=document.getElementById('topic-end');if(o)o.classList.remove('show');
+}
+function showTopicEnd(){
+  try{if(G.player&&G.playing)G.player.pauseVideo();}catch(e){}
+  var o=document.getElementById('topic-end');if(!o)return;
+  var hasNext=G.idx<G.topics.length-1;
+  var nb=document.getElementById('te-next');
+  if(nb)nb.style.display=hasNext?'':'none';
+  o.classList.add('show');
+}
+function repeatTopic(){
+  hideTopicEnd();G.topicEndShown=false;
+  try{if(G.player){G.player.seekTo(G.segStart||0,true);G.player.playVideo();}}catch(e){}
+}
+function nextTopicFromEnd(){
+  hideTopicEnd();
+  goNext();
 }
 function fmt(s){s=Math.floor(s||0);return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);}
 function syncPB(){var b=document.getElementById('pb');if(!b)return;b.innerHTML=G.playing?'<svg><use href="#i-pause"/></svg>':'<svg><use href="#i-play"/></svg>';}
 
 function clickBar(e){
   if(!G.player||!G.ytReady)return;
-  try{var r=e.currentTarget.getBoundingClientRect();G.player.seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*G.player.getDuration(),true);}catch(e){}
+  try{
+    var r=e.currentTarget.getBoundingClientRect();
+    var pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+    var segStart=G.segStart||0;
+    var dur=G.player.getDuration();
+    var segEnd=(G.segEnd&&G.segEnd>segStart)?G.segEnd:dur;
+    var target=segStart+pct*(segEnd-segStart);
+    G.topicEndShown=false;hideTopicEnd();
+    G.player.seekTo(target,true);
+  }catch(e){}
   if(G.playing)scheduleHide();
 }
 function showCtrl(autoHide){var c=document.getElementById('ctrl');if(!c)return;c.classList.add('show');clearTimeout(G.ctrlTimer);if(autoHide!==false&&G.playing)scheduleHide();}
@@ -245,6 +296,8 @@ function openPlayer(topics,idx,badgeText,backFn,startPos,dayVideoUrl){
   G.dayVideoUrl=dayVideoUrl||null;
   var tp=G.topics[G.idx];var total=G.topics.length;
   var vid=getVid(G.dayVideoUrl||tp.url||'');
+  G.segStart=tp.start||0;
+  G.segEnd=(G.idx<total-1&&G.topics[G.idx+1].start)?G.topics[G.idx+1].start:0;
   document.getElementById('p-back').onclick=G.backFn;
   document.getElementById('p-header').innerHTML='<span class="pbadge">'+G.badgeText+'</span><span class="pcnt">'+(G.idx+1)+' из '+total+'</span>';
   document.getElementById('p-label').textContent=G.badgeText+' — ТЕМА '+(G.idx+1);
