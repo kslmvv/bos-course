@@ -4,6 +4,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
+var IS_IOS = /iPhone|iPad/.test(navigator.userAgent);
 
 // "Открыть в браузере": a one-time token (see /api/browser-token) lets this
 // page load outside Telegram, where initData is unavailable but the real
@@ -155,8 +156,6 @@ function setMediaMode(mode) {
   w.classList.toggle('yt-mode', mode === 'yt');
   var b = document.getElementById('pipb');
   if (b) b.style.display = (mode === 'hls' && G.pipSupported) ? '' : 'none';
-  var t = document.getElementById('piptestb');
-  if (t) t.style.display = mode === 'hls' ? '' : 'none';
 }
 
 function loadVideo(vid, startPos) {
@@ -222,13 +221,12 @@ function loadHlsSrc(url, startPos) {
 }
 
 // Real PiP for the <video> element: requestPictureInPicture() on
-// Chromium-based engines (Android). On iOS, Telegram's WKWebView blocks both
-// requestPictureInPicture() and webkitSetPresentationMode(), so the button is
-// hidden there regardless of what the support checks report.
+// Chromium-based engines (Android). On iOS, Telegram's WKWebView disables
+// allowsPictureInPictureMediaPlayback, so PiP is impossible there — the
+// button stays hidden and "Open in Safari" (#obb) is offered instead.
 function initPiP() {
   var video = G.video;
-  var isIOS = /iPhone|iPad/.test(navigator.userAgent);
-  G.pipSupported = !isIOS && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
+  G.pipSupported = !IS_IOS && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
     || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture')));
   var b = document.getElementById('pipb');
   if (!b) return;
@@ -238,31 +236,6 @@ function initPiP() {
     b.classList.toggle('active', video.webkitPresentationMode === 'picture-in-picture');
   });
 }
-// iOS WKWebView can reject requestPictureInPicture() with "The video element
-// does not support the Picture-in-Picture mode" while playsinline/
-// webkit-playsinline are present on the element. Strip them for the call
-// (and force disablePictureInPicture=false), then restore once it settles.
-function withPiPAttrsRemoved(video, fn) {
-  var hadPlaysinline = video.hasAttribute('playsinline');
-  var hadWebkitPlaysinline = video.getAttribute('webkit-playsinline');
-  video.removeAttribute('playsinline');
-  video.removeAttribute('webkit-playsinline');
-  video.disablePictureInPicture = false;
-  var restore = function () {
-    if (hadPlaysinline) video.setAttribute('playsinline', '');
-    if (hadWebkitPlaysinline !== null) video.setAttribute('webkit-playsinline', hadWebkitPlaysinline);
-  };
-  var result;
-  try {
-    result = fn();
-  } catch (e) {
-    restore();
-    throw e;
-  }
-  if (result && typeof result.finally === 'function') return result.finally(restore);
-  restore();
-  return result;
-}
 function doPiP() {
   if (G.mode !== 'hls' || !G.pipSupported) return;
   var video = G.video;
@@ -271,235 +244,7 @@ function doPiP() {
     return;
   }
   if (document.pictureInPictureElement === video) { try { document.exitPictureInPicture(); } catch (e) {} }
-  else {
-    try {
-      withPiPAttrsRemoved(video, function () { return video.requestPictureInPicture(); }).catch(function () {});
-    } catch (e) {}
-  }
-}
-
-// ─── TEMP: iOS PiP diagnostics ────────────────────────────────────────────
-// Exploratory probes for getting real PiP working inside Telegram's iOS
-// WKWebView. "Test PiP" runs each method in turn; every step logs full
-// details to the console and alerts a short summary so results are visible
-// on-device without a remote debugger. Remove this block (and the "Test PiP"
-// button in index.html) once the investigation is done.
-function pipLog(label, msg) {
-  console.log('[PiP test] ' + label + ': ' + msg);
-  return msg;
-}
-
-// 1) video.webkitSetPresentationMode('picture-in-picture') — native Safari API.
-function testPiP1() {
-  var v = G.video;
-  var lines = [];
-  try {
-    lines.push('webkitSupportsPresentationMode: ' + (typeof v.webkitSupportsPresentationMode));
-    if (typeof v.webkitSupportsPresentationMode === 'function') {
-      lines.push('supports(picture-in-picture): ' + v.webkitSupportsPresentationMode('picture-in-picture'));
-    }
-    lines.push('webkitSetPresentationMode: ' + (typeof v.webkitSetPresentationMode));
-    lines.push('webkitPresentationMode before: ' + v.webkitPresentationMode);
-    if (typeof v.webkitSetPresentationMode === 'function') {
-      v.webkitSetPresentationMode('picture-in-picture');
-      lines.push('called set(picture-in-picture), webkitPresentationMode now: ' + v.webkitPresentationMode);
-    }
-  } catch (e) {
-    lines.push('ERROR: ' + (e && e.message || e));
-  }
-  var msg = lines.join('\n');
-  pipLog('1 webkitSetPresentationMode', msg);
-  alert('1) webkitSetPresentationMode:\n' + msg);
-}
-
-// 2) video.webkitEnterFullscreen() — native fullscreen player has its own PiP
-// button on iOS; check whether it's offered.
-function testPiP2() {
-  var v = G.video;
-  var lines = [];
-  try {
-    lines.push('webkitEnterFullscreen: ' + (typeof v.webkitEnterFullscreen));
-    lines.push('webkitSupportsFullscreen: ' + v.webkitSupportsFullscreen);
-    lines.push('webkitDisplayingFullscreen before: ' + v.webkitDisplayingFullscreen);
-    if (typeof v.webkitEnterFullscreen === 'function') {
-      v.webkitEnterFullscreen();
-      lines.push('called webkitEnterFullscreen(), webkitDisplayingFullscreen now: ' + v.webkitDisplayingFullscreen);
-    }
-  } catch (e) {
-    lines.push('ERROR: ' + (e && e.message || e));
-  }
-  var msg = lines.join('\n');
-  pipLog('2 webkitEnterFullscreen', msg);
-  alert('2) webkitEnterFullscreen (check the native fullscreen controls for a PiP icon):\n' + msg);
-}
-
-// 3) playsinline/webkit-playsinline/x-webkit-airplay/disablePictureInPicture
-// attributes, then try requestPictureInPicture() with them set.
-function testPiP3() {
-  var v = G.video;
-  var lines = [];
-  try {
-    v.setAttribute('playsinline', '');
-    v.setAttribute('webkit-playsinline', 'true');
-    v.setAttribute('x-webkit-airplay', 'allow');
-    v.disablePictureInPicture = false;
-    lines.push('playsinline=' + v.hasAttribute('playsinline'));
-    lines.push('webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
-    lines.push('x-webkit-airplay=' + v.getAttribute('x-webkit-airplay'));
-    lines.push('disablePictureInPicture=' + v.disablePictureInPicture);
-    lines.push('document.pictureInPictureEnabled=' + document.pictureInPictureEnabled);
-    lines.push('requestPictureInPicture=' + (typeof v.requestPictureInPicture));
-    if (typeof v.requestPictureInPicture === 'function') {
-      v.requestPictureInPicture().then(function () {
-        pipLog('3 requestPictureInPicture', 'resolved');
-        alert('3) attributes set, requestPictureInPicture() resolved (entered PiP!)\n' + lines.join('\n'));
-      }).catch(function (e) {
-        pipLog('3 requestPictureInPicture', 'rejected: ' + e.message);
-        alert('3) attributes set, requestPictureInPicture() rejected:\n' + e.message + '\n\n' + lines.join('\n'));
-      });
-      return;
-    }
-  } catch (e) {
-    lines.push('ERROR: ' + (e && e.message || e));
-  }
-  var msg = lines.join('\n');
-  pipLog('3 attributes', msg);
-  alert('3) attributes + PiP capability:\n' + msg);
-}
-
-// 4) Clone the stream into a second hidden <video> via captureStream() and
-// try PiP on the clone instead.
-function testPiP4() {
-  var v = G.video;
-  var lines = [];
-  try {
-    lines.push('captureStream: ' + (typeof v.captureStream));
-    lines.push('mozCaptureStream: ' + (typeof v.mozCaptureStream));
-    if (typeof v.captureStream !== 'function') {
-      var msg0 = lines.join('\n');
-      pipLog('4 captureStream', msg0);
-      alert('4) hidden <video> via captureStream:\n' + msg0);
-      return;
-    }
-    var stream = v.captureStream();
-    var hidden = document.createElement('video');
-    hidden.muted = true;
-    hidden.setAttribute('playsinline', '');
-    hidden.srcObject = stream;
-    hidden.style.position = 'fixed';
-    hidden.style.width = '2px';
-    hidden.style.height = '2px';
-    hidden.style.opacity = '0.01';
-    document.body.appendChild(hidden);
-    hidden.play().then(function () {
-      lines.push('hidden video playing from captureStream');
-      var pipCall;
-      if (typeof hidden.webkitSetPresentationMode === 'function') {
-        pipCall = function () { hidden.webkitSetPresentationMode('picture-in-picture'); return Promise.resolve('webkitSetPresentationMode called on clone'); };
-      } else if (typeof hidden.requestPictureInPicture === 'function') {
-        pipCall = function () { return hidden.requestPictureInPicture().then(function () { return 'requestPictureInPicture resolved on clone'; }); };
-      }
-      if (!pipCall) {
-        lines.push('hidden clone has no PiP API either');
-        var msg1 = lines.join('\n');
-        pipLog('4 captureStream', msg1);
-        alert('4) hidden <video> via captureStream:\n' + msg1);
-        document.body.removeChild(hidden);
-        return;
-      }
-      Promise.resolve(pipCall()).then(function (r) {
-        lines.push(r);
-        var msg2 = lines.join('\n');
-        pipLog('4 captureStream', msg2);
-        alert('4) hidden <video> via captureStream:\n' + msg2);
-      }).catch(function (e) {
-        lines.push('PiP on hidden clone error: ' + e.message);
-        var msg3 = lines.join('\n');
-        pipLog('4 captureStream', msg3);
-        alert('4) hidden <video> via captureStream:\n' + msg3);
-      }).finally(function () {
-        try { document.body.removeChild(hidden); } catch (e) {}
-      });
-    }).catch(function (e) {
-      lines.push('hidden video play() error: ' + e.message);
-      var msg4 = lines.join('\n');
-      pipLog('4 captureStream', msg4);
-      alert('4) hidden <video> via captureStream:\n' + msg4);
-      try { document.body.removeChild(hidden); } catch (e2) {}
-    });
-  } catch (e) {
-    lines.push('ERROR: ' + (e && e.message || e));
-    var msg5 = lines.join('\n');
-    pipLog('4 captureStream', msg5);
-    alert('4) hidden <video> via captureStream:\n' + msg5);
-  }
-}
-
-// 5) Probe for any AVKit / native bridge the Telegram WKWebView exposes.
-function testPiP5() {
-  var lines = [];
-  try {
-    lines.push('window.webkit: ' + (typeof window.webkit));
-    if (window.webkit && window.webkit.messageHandlers) {
-      lines.push('messageHandlers: ' + Object.keys(window.webkit.messageHandlers).join(', '));
-    } else {
-      lines.push('messageHandlers: none');
-    }
-    lines.push('TelegramWebviewProxy: ' + (typeof window.TelegramWebviewProxy));
-    var tg = window.Telegram && window.Telegram.WebApp;
-    lines.push('Telegram.WebApp: ' + (tg ? 'present' : 'absent'));
-    if (tg) {
-      lines.push('  version: ' + tg.version);
-      lines.push('  platform: ' + tg.platform);
-      lines.push('  isVersionAtLeast(8.0): ' + (typeof tg.isVersionAtLeast === 'function' ? tg.isVersionAtLeast('8.0') : 'n/a'));
-    }
-    lines.push('video.requestPictureInPicture: ' + (typeof G.video.requestPictureInPicture));
-    lines.push('document.pictureInPictureEnabled: ' + document.pictureInPictureEnabled);
-  } catch (e) {
-    lines.push('ERROR: ' + (e && e.message || e));
-  }
-  var msg = lines.join('\n');
-  pipLog('5 AVKit/Telegram bridge', msg);
-  alert('5) AVKit/Telegram bridge probe:\n' + msg);
-}
-
-// 6) On iOS, requestPictureInPicture() can reject with "The video element
-// does not support the Picture-in-Picture mode" while playsinline/
-// webkit-playsinline are set. Strip them via withPiPAttrsRemoved(), retry,
-// then restore regardless of outcome.
-function testPiP6() {
-  var v = G.video;
-  var lines = [];
-  lines.push('before: playsinline=' + v.hasAttribute('playsinline') + ', webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
-  if (typeof v.requestPictureInPicture !== 'function') {
-    lines.push('requestPictureInPicture: not available');
-    var msg0 = lines.join('\n');
-    pipLog('6 strip playsinline + retry', msg0);
-    alert('6) strip playsinline + retry requestPictureInPicture:\n' + msg0);
-    return;
-  }
-  withPiPAttrsRemoved(v, function () {
-    lines.push('removed playsinline/webkit-playsinline, disablePictureInPicture=' + v.disablePictureInPicture);
-    return v.requestPictureInPicture().then(function () {
-      lines.push('requestPictureInPicture resolved (entered PiP!)');
-    }).catch(function (e) {
-      lines.push('requestPictureInPicture rejected: ' + e.message);
-    });
-  }).then(function () {
-    lines.push('after: playsinline=' + v.hasAttribute('playsinline') + ', webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
-    var msg = lines.join('\n');
-    pipLog('6 strip playsinline + retry', msg);
-    alert('6) strip playsinline + retry requestPictureInPicture:\n' + msg);
-  });
-}
-
-function testAllPiP() {
-  testPiP1();
-  testPiP2();
-  testPiP3();
-  testPiP4();
-  testPiP5();
-  testPiP6();
+  else { try { video.requestPictureInPicture().catch(function () {}); } catch (e) {} }
 }
 
 // Builds the G.player dispatcher (delegates to whichever backend is active)
@@ -966,9 +711,8 @@ async function init() {
   if (!INIT_DATA && !URL_TOKEN) { showFatalMessage('Откройте приложение через Telegram.'); return; }
   if (!(await loadCourseData())) return;
   buildHome(); buildBonus(); buildTools();
-  if (URL_TOKEN) {
-    var ob = document.getElementById('obb'); if (ob) ob.style.display = 'none';
-    openFromParams(URL_DAY, URL_TOPIC);
-  }
+  var ob = document.getElementById('obb');
+  if (ob && (!IS_IOS || URL_TOKEN)) ob.style.display = 'none';
+  if (URL_TOKEN) openFromParams(URL_DAY, URL_TOPIC);
 }
 init();
