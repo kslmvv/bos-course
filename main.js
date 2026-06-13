@@ -5,6 +5,14 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
 
+// "Открыть в браузере": a one-time token (see /api/browser-token) lets this
+// page load outside Telegram, where initData is unavailable but the real
+// Fullscreen API isn't restricted.
+var URL_PARAMS = new URLSearchParams(location.search);
+var URL_TOKEN = URL_PARAMS.get('token');
+var URL_DAY = URL_PARAMS.get('day');
+var URL_TOPIC = URL_PARAMS.get('topic');
+
 var SAVE_KEY = 'bos_progress';
 
 var COURSE_DATA = null;
@@ -44,7 +52,11 @@ function showFatalMessage(text) {
 
 async function loadCourseData() {
   try {
-    var res = await fetch(API_BASE + '/api/course', { headers: apiHeaders() });
+    var url = API_BASE + '/api/course';
+    var opts = {};
+    if (URL_TOKEN) { url += '?token=' + encodeURIComponent(URL_TOKEN); }
+    else { opts.headers = apiHeaders(); }
+    var res = await fetch(url, opts);
     if (res.status === 401 || res.status === 403) {
       showFatalMessage('Доступ запрещён. Откройте курс через бота командой /start.');
       return false;
@@ -437,6 +449,65 @@ function openTool(i) {
   if (t.playlistUrl) { window.open(t.playlistUrl, '_blank'); }
   else if (t.topics && t.topics.length > 0) { openPlayer(t.topics, 0, t.title.toUpperCase(), function () { goTab('tools'); }); }
 }
+
+// ─── Открыть в браузере ───────────────────────────────────────────────
+
+function currentSectionKey() {
+  var m = /^ДЕНЬ (\d+)$/.exec(G.badgeText);
+  if (m) return 'day-' + m[1];
+  m = /^БОНУС (\d+)$/.exec(G.badgeText);
+  if (m) return 'bonus-' + (parseInt(m[1], 10) - 1);
+  if (COURSE_DATA && COURSE_DATA.tools) {
+    for (var i = 0; i < COURSE_DATA.tools.length; i++) {
+      if (COURSE_DATA.tools[i].title.toUpperCase() === G.badgeText) return 'tool-' + i;
+    }
+  }
+  return null;
+}
+
+function openFromParams(sectionKey, topicIdx) {
+  if (!sectionKey || !COURSE_DATA) return false;
+  var idx = parseInt(topicIdx, 10); if (!(idx >= 0)) idx = 0;
+  var m = /^day-(\d+)$/.exec(sectionKey);
+  if (m) {
+    var day = COURSE_DATA.days.find(function (d) { return d.id === parseInt(m[1], 10); });
+    if (!day || !day.topics[idx]) return false;
+    openPlayer(day.topics, idx, 'ДЕНЬ ' + day.id, function () { openDay(day.id); }, day.topics[idx].startSeconds || 0, day.videoId);
+    return true;
+  }
+  m = /^bonus-(\d+)$/.exec(sectionKey);
+  if (m) {
+    var b = COURSE_DATA.bonuses[parseInt(m[1], 10)];
+    if (!b || !b.topics[idx]) return false;
+    openPlayer(b.topics, idx, 'БОНУС ' + (parseInt(m[1], 10) + 1), function () { goTab('bonus'); });
+    return true;
+  }
+  m = /^tool-(\d+)$/.exec(sectionKey);
+  if (m) {
+    var t = COURSE_DATA.tools[parseInt(m[1], 10)];
+    if (!t || !t.topics || !t.topics[idx]) return false;
+    openPlayer(t.topics, idx, t.title.toUpperCase(), function () { goTab('tools'); });
+    return true;
+  }
+  return false;
+}
+
+async function openInBrowser() {
+  var section = currentSectionKey();
+  try {
+    var res = await fetch(API_BASE + '/api/browser-token', {
+      method: 'POST',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ day: section, topic: topicLabel(G.idx) })
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    var url = location.origin + location.pathname + '?token=' + encodeURIComponent(data.token) + '&topic=' + G.idx;
+    if (section) url += '&day=' + encodeURIComponent(section);
+    if (tg && tg.openLink) tg.openLink(url, { try_instant_view: false });
+    else window.open(url, '_blank');
+  } catch (e) {}
+}
 window.addEventListener('orientationchange', function () { setTimeout(function () { var w = document.getElementById('vw'); if (w && G.fs) applyFsSize(w); }, 400); });
 window.addEventListener('resize', function () { if (G.fs) { var w = document.getElementById('vw'); if (w) applyFsSize(w); } });
 
@@ -444,8 +515,12 @@ window.addEventListener('resize', function () { if (G.fs) { var w = document.get
 
 async function init() {
   if (tg) { tg.ready(); tg.expand(); }
-  if (!INIT_DATA) { showFatalMessage('Откройте приложение через Telegram.'); return; }
+  if (!INIT_DATA && !URL_TOKEN) { showFatalMessage('Откройте приложение через Telegram.'); return; }
   if (!(await loadCourseData())) return;
   buildHome(); buildBonus(); buildTools();
+  if (URL_TOKEN) {
+    var ob = document.getElementById('obb'); if (ob) ob.style.display = 'none';
+    openFromParams(URL_DAY, URL_TOPIC);
+  }
 }
 init();
