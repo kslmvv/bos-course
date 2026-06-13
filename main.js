@@ -19,11 +19,25 @@ var COURSE_DATA = null;
 
 var G = {
   topics: [], idx: 0, badgeText: '', backFn: null,
-  player: null, ytReady: false, playing: false, ready: false, fs: false,
+  player: null, mode: null, ytPlayer: null, ytReady: false, video: null, hls: null, pipSupported: false,
+  playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
   dragging: false, dragPct: 0, fsCoverTimer: null
 };
+
+// True once the currently-loaded backend (HLS <video> or YouTube iframe) can
+// respond to getCurrentTime/seekTo/etc. The <video> element is always ready
+// immediately; the YouTube iframe needs its async API to finish loading.
+function playerReady() {
+  return G.mode === 'hls' ? true : (G.mode === 'yt' && G.ytReady);
+}
+
+// The DOM element currently driving playback, used by the fullscreen code to
+// resize/restyle whichever backend is active.
+function activeMediaEl(w) {
+  return G.mode === 'hls' ? G.video : w.querySelector('iframe');
+}
 
 function apiHeaders(extra) {
   var h = extra ? Object.assign({}, extra) : {};
@@ -75,7 +89,7 @@ async function loadCourseData() {
 function saveProgress() {
   try {
     var pos = 0;
-    if (G.player && G.ytReady && G.ready) { try { pos = Math.floor(G.player.getCurrentTime() || 0); } catch (e) {} }
+    if (playerReady() && G.ready) { try { pos = Math.floor(G.player.getCurrentTime() || 0); } catch (e) {} }
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       badgeText: G.badgeText, idx: G.idx, pos: pos,
       title: G.topics[G.idx] ? G.topics[G.idx].title : '',
@@ -95,7 +109,7 @@ function startStatsTimer() {
   G.statsTimer = setInterval(function () { if (G.playing) reportProgress(); }, 15000);
 }
 function reportProgress() {
-  if (!G.player || !G.ytReady || !G.ready) return;
+  if (!playerReady() || !G.ready) return;
   try {
     var cur = G.player.getCurrentTime();
     var segCur = Math.max(0, cur - (G.segStart || 0));
@@ -110,14 +124,14 @@ function reportProgress() {
 
 function onYouTubeIframeAPIReady() {
   G.ytReady = true;
-  G.player = new YT.Player('ytpl', {
+  G.ytPlayer = new YT.Player('ytpl', {
     playerVars: { controls: 0, disablekb: 1, fs: 1, modestbranding: 1, rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1, enablejsapi: 1 },
     events: {
       onReady: function () {
-        if (G.pendingVid) { G.player.loadVideoById({ videoId: G.pendingVid, startSeconds: G.pendingPos }); G.pendingVid = null; G.pendingPos = 0; }
-        setupPiP();
+        if (G.pendingVid) { G.ytPlayer.loadVideoById({ videoId: G.pendingVid, startSeconds: G.pendingPos }); G.pendingVid = null; G.pendingPos = 0; }
       },
       onStateChange: function (e) {
+        if (G.mode !== 'yt') return;
         G.playing = (e.data === YT.PlayerState.PLAYING);
         if (G.playing) { G.ready = true; startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
         else { clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); }
@@ -135,12 +149,34 @@ function resetPlayerUI() {
   hideCtrl();
 }
 
+function setMediaMode(mode) {
+  var w = document.getElementById('vw'); if (!w) return;
+  w.classList.toggle('hls-mode', mode === 'hls');
+  w.classList.toggle('yt-mode', mode === 'yt');
+  var b = document.getElementById('pipb');
+  if (b) b.style.display = (mode === 'hls' && G.pipSupported) ? '' : 'none';
+}
+
 function loadVideo(vid, startPos) {
   resetPlayerUI();
   G.ready = false; G.playing = false;
   startPos = startPos || 0;
-  if (G.ytReady && G.player && G.player.loadVideoById) { G.player.loadVideoById({ videoId: vid, startSeconds: startPos }); G.ready = true; }
-  else { G.pendingVid = vid; G.pendingPos = startPos; }
+  // Pause/release whichever backend was previously active before switching.
+  if (G.mode === 'hls') { try { G.video.pause(); } catch (e) {} }
+  else if (G.mode === 'yt' && G.ytPlayer) { try { G.ytPlayer.pauseVideo(); } catch (e) {} }
+  var mode = /^https?:\/\//.test(vid) ? 'hls' : 'yt';
+  if (mode !== 'hls' && G.hls) { try { G.hls.destroy(); } catch (e) {} G.hls = null; }
+  G.mode = mode;
+  setMediaMode(mode);
+  if (mode === 'hls') {
+    loadHlsSrc(vid, startPos);
+    G.ready = true;
+  } else if (G.ytReady && G.ytPlayer && G.ytPlayer.loadVideoById) {
+    G.ytPlayer.loadVideoById({ videoId: vid, startSeconds: startPos });
+    G.ready = true;
+  } else {
+    G.pendingVid = vid; G.pendingPos = startPos;
+  }
   G.currentVid = vid;
 }
 
@@ -153,36 +189,114 @@ function seekWithinVideo(pos) {
   G.ready = true;
 }
 
-function doPlay() { if (!G.player || !G.ytReady) return; try { G.playing ? G.player.pauseVideo() : G.player.playVideo(); } catch (e) {} }
-function doSeek(d) { if (!G.player || !G.ytReady) return; try { G.player.seekTo(Math.max(0, G.player.getCurrentTime() + d), true); } catch (e) {} if (G.playing) scheduleHide(); }
+function doPlay() { if (!playerReady()) return; try { G.playing ? G.player.pauseVideo() : G.player.playVideo(); } catch (e) {} }
+function doSeek(d) { if (!playerReady()) return; try { G.player.seekTo(Math.max(0, G.player.getCurrentTime() + d), true); } catch (e) {} if (G.playing) scheduleHide(); }
 
-// ─── Picture-in-Picture ──────────────────────────────────────────────────
+// ─── HLS <video> player + Picture-in-Picture ─────────────────────────────
 
-// Ensures the YouTube iframe allows PiP, hides the button when the browser
-// doesn't support iframe PiP, and keeps the button state in sync.
-function setupPiP() {
-  var w = document.getElementById('vw'); var iframe = w && w.querySelector('iframe');
-  var b = document.getElementById('pipb'); if (!iframe || !b) return;
-  var allow = iframe.getAttribute('allow') || '';
-  if (allow.indexOf('picture-in-picture') === -1) iframe.setAttribute('allow', (allow ? allow + '; ' : '') + 'picture-in-picture');
-  if (!document.pictureInPictureEnabled || typeof iframe.requestPictureInPicture !== 'function') { b.style.display = 'none'; return; }
-  iframe.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
-  iframe.addEventListener('leavepictureinpicture', function () { b.classList.remove('active'); });
+// Loads an HLS playlist into G.video: native HLS on Safari/iOS, hls.js
+// elsewhere. Seeks to startPos and starts playback once the manifest/metadata
+// is available.
+function loadHlsSrc(url, startPos) {
+  var video = G.video;
+  if (G.hls) { try { G.hls.destroy(); } catch (e) {} G.hls = null; }
+  var onReady = function () {
+    try { video.currentTime = startPos || 0; } catch (e) {}
+    video.play().catch(function () {});
+  };
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;
+    video.addEventListener('loadedmetadata', onReady, { once: true });
+  } else if (window.Hls && window.Hls.isSupported()) {
+    var hls = new window.Hls();
+    G.hls = hls;
+    hls.on(window.Hls.Events.MANIFEST_PARSED, onReady);
+    hls.loadSource(url);
+    hls.attachMedia(video);
+  } else {
+    video.src = url;
+    video.addEventListener('loadedmetadata', onReady, { once: true });
+  }
+}
+
+// Real PiP for the <video> element: requestPictureInPicture() on
+// Chromium-based engines, webkitSetPresentationMode on Safari/iOS (the latter
+// is gated by the host app's allowsPictureInPicturePlayback flag in Telegram's
+// WKWebView, which we cannot control).
+function initPiP() {
+  var video = G.video;
+  G.pipSupported = !!(document.pictureInPictureEnabled && video.requestPictureInPicture)
+    || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture'));
+  var b = document.getElementById('pipb');
+  if (!b) return;
+  video.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
+  video.addEventListener('leavepictureinpicture', function () { b.classList.remove('active'); });
+  video.addEventListener('webkitpresentationmodechanged', function () {
+    b.classList.toggle('active', video.webkitPresentationMode === 'picture-in-picture');
+  });
 }
 function doPiP() {
-  var w = document.getElementById('vw'); var iframe = w && w.querySelector('iframe'); if (!iframe) return;
-  if (!document.pictureInPictureEnabled || typeof iframe.requestPictureInPicture !== 'function') {
-    var b = document.getElementById('pipb'); if (b) b.style.display = 'none';
+  if (G.mode !== 'hls' || !G.pipSupported) return;
+  var video = G.video;
+  if (typeof video.webkitSetPresentationMode === 'function') {
+    video.webkitSetPresentationMode(video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
     return;
   }
-  if (document.pictureInPictureElement === iframe) { try { document.exitPictureInPicture(); } catch (e) {} }
-  else { try { iframe.requestPictureInPicture().catch(function () {}); } catch (e) {} }
+  if (document.pictureInPictureElement === video) { try { document.exitPictureInPicture(); } catch (e) {} }
+  else { try { video.requestPictureInPicture().catch(function () {}); } catch (e) {} }
 }
+
+// Builds the G.player dispatcher (delegates to whichever backend is active)
+// and wires up <video> playback events that mirror the YouTube onStateChange
+// handling above.
+function initPlayer() {
+  G.video = document.getElementById('vplayer');
+  G.player = {
+    getCurrentTime: function () {
+      if (G.mode === 'hls') return G.video.currentTime || 0;
+      try { return G.ytPlayer.getCurrentTime(); } catch (e) { return 0; }
+    },
+    getDuration: function () {
+      if (G.mode === 'hls') return G.video.duration || 0;
+      try { return G.ytPlayer.getDuration(); } catch (e) { return 0; }
+    },
+    seekTo: function (sec) {
+      if (G.mode === 'hls') { try { G.video.currentTime = sec; } catch (e) {} }
+      else { try { G.ytPlayer.seekTo(sec, true); } catch (e) {} }
+    },
+    playVideo: function () {
+      if (G.mode === 'hls') { G.video.play().catch(function () {}); }
+      else { try { G.ytPlayer.playVideo(); } catch (e) {} }
+    },
+    pauseVideo: function () {
+      if (G.mode === 'hls') { G.video.pause(); }
+      else { try { G.ytPlayer.pauseVideo(); } catch (e) {} }
+    },
+    stopVideo: function () {
+      if (G.mode === 'hls') { G.video.pause(); try { G.video.currentTime = 0; } catch (e) {} }
+      else { try { G.ytPlayer.stopVideo(); } catch (e) {} }
+    }
+  };
+  G.video.addEventListener('play', function () {
+    if (G.mode !== 'hls') return;
+    G.playing = true; G.ready = true; startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); syncPB();
+  });
+  G.video.addEventListener('pause', function () {
+    if (G.mode !== 'hls') return;
+    clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); syncPB();
+  });
+  G.video.addEventListener('ended', function () {
+    if (G.mode !== 'hls') return;
+    G.playing = false; clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); syncPB();
+  });
+  initPiP();
+}
+initPlayer();
 
 function startProg() {
   clearInterval(G.progTimer);
   G.progTimer = setInterval(function () {
-    if (!G.player || !G.ytReady || G.dragging) return;
+    if (!playerReady() || G.dragging) return;
     try {
       var cur = G.player.getCurrentTime(), dur = G.player.getDuration();
       if (!dur) return;
@@ -225,7 +339,7 @@ function fmt(s) { s = Math.floor(s || 0); return Math.floor(s / 60) + ':' + ('0'
 function syncPB() { var b = document.getElementById('pb'); if (!b) return; b.innerHTML = G.playing ? '<svg><use href="#i-pause"/></svg>' : '<svg><use href="#i-play"/></svg>'; }
 
 function clickBar(e) {
-  if (!G.player || !G.ytReady) return;
+  if (!playerReady()) return;
   try {
     var r = e.currentTarget.getBoundingClientRect();
     var pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -249,7 +363,7 @@ function pbarEventPct(e, bar) {
 }
 function pbarSegDur() {
   var segStart = G.segStart || 0;
-  var dur = (G.player && G.ytReady) ? G.player.getDuration() : 0;
+  var dur = playerReady() ? G.player.getDuration() : 0;
   var segEnd = (G.segEnd && G.segEnd > segStart) ? G.segEnd : dur;
   return Math.max(1, segEnd - segStart);
 }
@@ -260,7 +374,7 @@ function pbarRenderDrag() {
   var td = document.getElementById('td'); if (td) td.textContent = fmt(segDur);
 }
 function pbarStartDrag(e) {
-  if (!G.player || !G.ytReady) return;
+  if (!playerReady()) return;
   G.dragging = true;
   G.dragPct = pbarEventPct(e, e.currentTarget);
   pbarRenderDrag();
@@ -333,8 +447,8 @@ function doFS() {
     var nowFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
     if (nowFs) {
       G.fs = true; syncFS();
-      var iframe = w.querySelector('iframe');
-      if (iframe) iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+      var media = activeMediaEl(w);
+      if (media) media.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
     } else {
       cssFS(w);
     }
@@ -347,16 +461,16 @@ function doFS() {
 function applyFsState(w, isFs) {
   G.fs = isFs; w.classList.toggle('fs', G.fs);
   if (G.fs) { document.body.style.overflow = 'hidden'; document.documentElement.style.overflow = 'hidden'; applyFsSize(w); }
-  else { document.body.style.overflow = ''; document.documentElement.style.overflow = ''; w.style.width = ''; w.style.height = ''; var iframe = w.querySelector('iframe'); if (iframe) { iframe.style.width = ''; iframe.style.height = ''; } }
+  else { document.body.style.overflow = ''; document.documentElement.style.overflow = ''; w.style.width = ''; w.style.height = ''; var media = activeMediaEl(w); if (media) { media.style.width = ''; media.style.height = ''; } }
   syncFS();
 }
 function cssFS(w) { applyFsState(w, !G.fs); }
-function applyFsSize(w) { var W = window.innerWidth, H = window.innerHeight; w.style.width = W + 'px'; w.style.height = H + 'px'; var iframe = w.querySelector('iframe'); if (iframe) { iframe.style.width = W + 'px'; iframe.style.height = H + 'px'; } }
+function applyFsSize(w) { var W = window.innerWidth, H = window.innerHeight; w.style.width = W + 'px'; w.style.height = H + 'px'; var media = activeMediaEl(w); if (media) { media.style.width = W + 'px'; media.style.height = H + 'px'; } }
 function syncFS() { var b = document.getElementById('fsb'); if (!b) return; b.innerHTML = G.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>'; }
 function exitNativeFS() {
   G.fs = false; syncFS();
-  var w = document.getElementById('vw'); var iframe = w && w.querySelector('iframe');
-  if (iframe) iframe.style.cssText = '';
+  var w = document.getElementById('vw'); var media = w && activeMediaEl(w);
+  if (media) media.style.cssText = '';
 }
 document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement) exitNativeFS(); });
 document.addEventListener('webkitfullscreenchange', function () { if (!document.webkitFullscreenElement) exitNativeFS(); });
@@ -396,7 +510,7 @@ document.addEventListener('touchcancel', pbarEndDrag);
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
   saveProgress(); reportProgress();
-  if (G.player && G.ytReady) { try { G.player.stopVideo(); } catch (e) {} }
+  if (playerReady()) { try { G.player.stopVideo(); } catch (e) {} }
   G.playing = false; syncPB(); hideCtrl();
 }
 
@@ -424,7 +538,7 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId) {
   if (startPos === undefined) saveProgress();
   reportStats(badgeText, topicLabel(idx), Math.max(0, Math.floor(pos - G.segStart)));
 
-  if (vid === G.currentVid && G.ytReady && G.player && G.ready) {
+  if (vid === G.currentVid && playerReady() && G.ready) {
     seekWithinVideo(pos);
   } else {
     loadVideo(vid, pos);
@@ -474,7 +588,7 @@ function continueWatch(e) {
   var day = COURSE_DATA.days.find(function (d) { return d.id === prog.dayId; });
   if (!day) return;
   var sp = prog.pos || day.topics[prog.idx].startSeconds || 0;
-  openPlayer(day.topics, prog.idx, 'ДЕНЬ ' + prog.dayId, function () { openDay(prog.dayId); }, sp, day.videoId);
+  openPlayer(day.topics, prog.idx, 'ДЕНЬ ' + prog.dayId, function () { openDay(prog.dayId); }, sp, day.videoHlsUrl);
 }
 function startNew(e) { e.stopPropagation(); clearProgress(); buildHome(); }
 
@@ -498,7 +612,7 @@ function openDayVideo(dayId, idx) {
   var day = COURSE_DATA.days.find(function (d) { return d.id === dayId; });
   if (!day) return;
   var startPos = day.topics[idx].startSeconds || 0;
-  openPlayer(day.topics, idx, 'ДЕНЬ ' + dayId, function () { openDay(dayId); }, startPos, day.videoId);
+  openPlayer(day.topics, idx, 'ДЕНЬ ' + dayId, function () { openDay(dayId); }, startPos, day.videoHlsUrl);
 }
 function goHome() {
   stopVideo();
@@ -549,7 +663,7 @@ function openFromParams(sectionKey, topicIdx) {
   if (m) {
     var day = COURSE_DATA.days.find(function (d) { return d.id === parseInt(m[1], 10); });
     if (!day || !day.topics[idx]) return false;
-    openPlayer(day.topics, idx, 'ДЕНЬ ' + day.id, function () { openDay(day.id); }, day.topics[idx].startSeconds || 0, day.videoId);
+    openPlayer(day.topics, idx, 'ДЕНЬ ' + day.id, function () { openDay(day.id); }, day.topics[idx].startSeconds || 0, day.videoHlsUrl);
     return true;
   }
   m = /^bonus-(\d+)$/.exec(sectionKey);

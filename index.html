@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>БОС Курс</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#0f0f0f;--sur:#1a1a1a;--sur2:#242424;--acc:#f5c518;--tx:#fff;--tx2:#888;--r:12px}
@@ -50,6 +51,9 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 #s-player.on{display:flex}
 .vwrap{position:relative;width:100%;background:#000;border-radius:var(--r);overflow:hidden;margin-top:12px;flex-shrink:0}
 .vwrap iframe{display:block;width:100%;aspect-ratio:16/9;border:none;pointer-events:none}
+.vwrap video{display:block;width:100%;aspect-ratio:16/9;border:none;background:#000;object-fit:contain;pointer-events:none}
+.vwrap:not(.yt-mode) iframe,.vwrap:not(.yt-mode) .ytop,.vwrap:not(.yt-mode) .ybot{display:none}
+.vwrap:not(.hls-mode) video{display:none}
 .ytop{position:absolute;top:0;left:0;right:0;height:60px;background:#000;z-index:11}
 .ybot{position:absolute;bottom:0;left:0;right:0;height:50px;background:#000;z-index:11}
 .ytap{position:absolute;inset:0;z-index:12;cursor:pointer}
@@ -73,7 +77,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .fsbtn.active svg{fill:var(--acc)}
 .vwrap.fs{position:fixed!important;top:0;left:0;z-index:9999;border-radius:0;margin:0;background:#000}
 .vwrap.fs .ytop,.vwrap.fs .ybot{display:none}
-.vwrap.fs iframe{position:absolute;top:0;left:0;border:none!important;pointer-events:none}
+.vwrap.fs iframe,.vwrap.fs video{position:absolute;top:0;left:0;border:none!important;pointer-events:none;object-fit:contain}
 .vwrap.fs .ctrl{z-index:30}
 .vwrap.fs .ytap{z-index:25}
 .fsexit{display:none;position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);border:none;align-items:center;justify-content:center;cursor:pointer;z-index:40}
@@ -105,6 +109,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
   <div id="p-header" style="margin-bottom:12px"></div>
   <div class="vwrap" id="vw">
     <div id="ytpl"></div>
+    <video id="vplayer" playsinline webkit-playsinline="true"></video>
     <div class="ytop"></div>
     <div class="ybot"></div>
     <div class="ytap" onclick="tapVideo()"></div>
