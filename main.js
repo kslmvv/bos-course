@@ -22,7 +22,7 @@ var G = {
   player: null, ytReady: false, playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
-  dragging: false, dragPct: 0
+  dragging: false, dragPct: 0, fsCoverTimer: null
 };
 
 function apiHeaders(extra) {
@@ -272,10 +272,27 @@ function tgFSSupported() {
   return !URL_TOKEN && !!(tg && tg.requestFullscreen && tg.exitFullscreen && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0'));
 }
 
+// Hides the iframe-resize flash (YouTube briefly shows its title/controls
+// overlay) behind an opaque cover while tg.requestFullscreen() resizes the
+// viewport. Removed once fullscreenChanged fires (with a safety timeout in
+// case it never does).
+function fsCoverOn() {
+  var c = document.getElementById('ctrl'); if (!c) return;
+  c.classList.add('fscover');
+  clearTimeout(G.fsCoverTimer);
+  G.fsCoverTimer = setTimeout(fsCoverOff, 500);
+}
+function fsCoverOff() {
+  clearTimeout(G.fsCoverTimer);
+  var c = document.getElementById('ctrl'); if (c) c.classList.remove('fscover');
+}
+
 function doFS() {
   var w = document.getElementById('vw'); if (!w) return;
   if (tgFSSupported()) {
-    try { if (G.fs) tg.exitFullscreen(); else tg.requestFullscreen(); } catch (e) {}
+    if (G.fs) { try { tg.exitFullscreen(); } catch (e) {} return; }
+    fsCoverOn();
+    try { tg.requestFullscreen(); } catch (e) { fsCoverOff(); }
     return;
   }
   var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
@@ -330,9 +347,11 @@ if (tgFSSupported()) {
     // show it while our fullscreen is active so the hardware/system back
     // gesture exits fullscreen instead of closing the WebApp.
     try { if (tg.isFullscreen) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
+    fsCoverOff();
   });
   tg.onEvent('fullscreenFailed', function () {
     var w = document.getElementById('vw'); if (w) cssFS(w);
+    fsCoverOff();
   });
   tg.onEvent('backButtonClicked', function () {
     if (G.fs) doFS();
