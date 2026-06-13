@@ -265,8 +265,19 @@ function hideCtrl() { var c = document.getElementById('ctrl'); if (!c) return; c
 function scheduleHide() { clearTimeout(G.ctrlTimer); G.ctrlTimer = setTimeout(function () { if (G.playing) hideCtrl(); }, 3500); }
 function tapVideo() { var c = document.getElementById('ctrl'); if (!c) return; if (c.classList.contains('show')) { hideCtrl(); } else { showCtrl(true); } }
 
+// Telegram Mini Apps Fullscreen API (Bot API 8.0+) hides the Telegram header
+// entirely. Only used inside Telegram (not in "Открыть в браузере" mode,
+// where the regular Fullscreen API below is unrestricted anyway).
+function tgFSSupported() {
+  return !URL_TOKEN && !!(tg && tg.requestFullscreen && tg.exitFullscreen && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0'));
+}
+
 function doFS() {
   var w = document.getElementById('vw'); if (!w) return;
+  if (tgFSSupported()) {
+    try { if (G.fs) tg.exitFullscreen(); else tg.requestFullscreen(); } catch (e) {}
+    return;
+  }
   var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
   if (fsEl) {
     var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
@@ -292,12 +303,13 @@ function doFS() {
   if (result && typeof result.then === 'function') { result.then(function () { setTimeout(onEnter, 100); }).catch(function () { cssFS(w); }); }
   else { setTimeout(onEnter, 100); }
 }
-function cssFS(w) {
-  G.fs = !G.fs; w.classList.toggle('fs', G.fs);
+function applyFsState(w, isFs) {
+  G.fs = isFs; w.classList.toggle('fs', G.fs);
   if (G.fs) { document.body.style.overflow = 'hidden'; document.documentElement.style.overflow = 'hidden'; applyFsSize(w); }
   else { document.body.style.overflow = ''; document.documentElement.style.overflow = ''; w.style.width = ''; w.style.height = ''; var iframe = w.querySelector('iframe'); if (iframe) { iframe.style.width = ''; iframe.style.height = ''; } }
   syncFS();
 }
+function cssFS(w) { applyFsState(w, !G.fs); }
 function applyFsSize(w) { var W = window.innerWidth, H = window.innerHeight; w.style.width = W + 'px'; w.style.height = H + 'px'; var iframe = w.querySelector('iframe'); if (iframe) { iframe.style.width = W + 'px'; iframe.style.height = H + 'px'; } }
 function syncFS() { var b = document.getElementById('fsb'); if (!b) return; b.innerHTML = G.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>'; }
 function exitNativeFS() {
@@ -309,6 +321,15 @@ document.addEventListener('fullscreenchange', function () { if (!document.fullsc
 document.addEventListener('webkitfullscreenchange', function () { if (!document.webkitFullscreenElement) exitNativeFS(); });
 document.addEventListener('mozfullscreenchange', function () { if (!document.mozFullScreenElement) exitNativeFS(); });
 document.addEventListener('MSFullscreenChange', function () { if (!document.msFullscreenElement) exitNativeFS(); });
+
+if (tgFSSupported()) {
+  tg.onEvent('fullscreenChanged', function () {
+    var w = document.getElementById('vw'); if (w) applyFsState(w, !!tg.isFullscreen);
+  });
+  tg.onEvent('fullscreenFailed', function () {
+    var w = document.getElementById('vw'); if (w) cssFS(w);
+  });
+}
 
 document.addEventListener('mousemove', pbarMoveDrag);
 document.addEventListener('mouseup', pbarEndDrag);
