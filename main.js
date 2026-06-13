@@ -280,7 +280,7 @@ function fsCoverOn() {
   var c = document.getElementById('ctrl'); if (!c) return;
   c.classList.add('fscover');
   clearTimeout(G.fsCoverTimer);
-  G.fsCoverTimer = setTimeout(fsCoverOff, 500);
+  G.fsCoverTimer = setTimeout(fsCoverOff, 700);
 }
 function fsCoverOff() {
   clearTimeout(G.fsCoverTimer);
@@ -347,11 +347,16 @@ if (tgFSSupported()) {
     // show it while our fullscreen is active so the hardware/system back
     // gesture exits fullscreen instead of closing the WebApp.
     try { if (tg.isFullscreen) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
-    fsCoverOff();
+    // Keep the cover up a bit longer: the viewport-resize animation/iframe
+    // reflow (and the YouTube overlay flash it causes) is still settling
+    // when this event fires.
+    clearTimeout(G.fsCoverTimer);
+    G.fsCoverTimer = setTimeout(fsCoverOff, 400);
   });
   tg.onEvent('fullscreenFailed', function () {
     var w = document.getElementById('vw'); if (w) cssFS(w);
-    fsCoverOff();
+    clearTimeout(G.fsCoverTimer);
+    G.fsCoverTimer = setTimeout(fsCoverOff, 400);
   });
   tg.onEvent('backButtonClicked', function () {
     if (G.fs) doFS();
