@@ -220,13 +220,14 @@ function loadHlsSrc(url, startPos) {
 }
 
 // Real PiP for the <video> element: requestPictureInPicture() on
-// Chromium-based engines, webkitSetPresentationMode on Safari/iOS (the latter
-// is gated by the host app's allowsPictureInPicturePlayback flag in Telegram's
-// WKWebView, which we cannot control).
+// Chromium-based engines (Android). On iOS, Telegram's WKWebView blocks both
+// requestPictureInPicture() and webkitSetPresentationMode(), so the button is
+// hidden there regardless of what the support checks report.
 function initPiP() {
   var video = G.video;
-  G.pipSupported = !!(document.pictureInPictureEnabled && video.requestPictureInPicture)
-    || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture'));
+  var isIOS = /iPhone|iPad/.test(navigator.userAgent);
+  G.pipSupported = !isIOS && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
+    || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture')));
   var b = document.getElementById('pipb');
   if (!b) return;
   video.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
@@ -283,6 +284,7 @@ function initPlayer() {
   });
   G.video.addEventListener('pause', function () {
     if (G.mode !== 'hls') return;
+    G.playing = false;
     clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); syncPB();
   });
   G.video.addEventListener('ended', function () {
