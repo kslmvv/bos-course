@@ -70,6 +70,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .fsbtn{background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center}
 .fsgrp{display:flex;align-items:center;gap:14px}
 .fsbtn svg{width:20px;height:20px;fill:#fff}
+.fsbtn.active svg{fill:var(--acc)}
 .vwrap.fs{position:fixed!important;top:0;left:0;z-index:9999;border-radius:0;margin:0;background:#000}
 .vwrap.fs .ytop,.vwrap.fs .ybot{display:none}
 .vwrap.fs iframe{position:absolute;top:0;left:0;border:none!important;pointer-events:none}
@@ -126,6 +127,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
           <span class="tdisp"><span id="tc">0:00</span> / <span id="td">0:00</span></span>
           <div class="fsgrp">
             <button class="fsbtn" id="obb" onclick="openInBrowser();event.stopPropagation()"><svg><use href="#i-ext"/></svg></button>
+            <button class="fsbtn" id="pipb" onclick="doPiP();event.stopPropagation()"><svg><use href="#i-pip"/></svg></button>
             <button class="fsbtn" id="fsb" onclick="doFS();event.stopPropagation()"><svg><use href="#i-fs"/></svg></button>
           </div>
         </div>
@@ -153,6 +155,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
   <symbol id="i-fs" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></symbol>
   <symbol id="i-xfs" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM5 5h6V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6h-2v6H5V5z"/></symbol>
+  <symbol id="i-pip" viewBox="0 0 24 24"><path d="M19 11h-8v6h8v-6zM23 3H1v18h22V3zm-2 16H3V5h18v14z"/></symbol>
 </svg>
 <script src="main.js"></script>
 </body>

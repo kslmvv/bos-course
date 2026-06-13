@@ -115,6 +115,7 @@ function onYouTubeIframeAPIReady() {
     events: {
       onReady: function () {
         if (G.pendingVid) { G.player.loadVideoById({ videoId: G.pendingVid, startSeconds: G.pendingPos }); G.pendingVid = null; G.pendingPos = 0; }
+        setupPiP();
       },
       onStateChange: function (e) {
         G.playing = (e.data === YT.PlayerState.PLAYING);
@@ -154,6 +155,29 @@ function seekWithinVideo(pos) {
 
 function doPlay() { if (!G.player || !G.ytReady) return; try { G.playing ? G.player.pauseVideo() : G.player.playVideo(); } catch (e) {} }
 function doSeek(d) { if (!G.player || !G.ytReady) return; try { G.player.seekTo(Math.max(0, G.player.getCurrentTime() + d), true); } catch (e) {} if (G.playing) scheduleHide(); }
+
+// ─── Picture-in-Picture ──────────────────────────────────────────────────
+
+// Ensures the YouTube iframe allows PiP, hides the button when the browser
+// doesn't support iframe PiP, and keeps the button state in sync.
+function setupPiP() {
+  var w = document.getElementById('vw'); var iframe = w && w.querySelector('iframe');
+  var b = document.getElementById('pipb'); if (!iframe || !b) return;
+  var allow = iframe.getAttribute('allow') || '';
+  if (allow.indexOf('picture-in-picture') === -1) iframe.setAttribute('allow', (allow ? allow + '; ' : '') + 'picture-in-picture');
+  if (!document.pictureInPictureEnabled || typeof iframe.requestPictureInPicture !== 'function') { b.style.display = 'none'; return; }
+  iframe.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
+  iframe.addEventListener('leavepictureinpicture', function () { b.classList.remove('active'); });
+}
+function doPiP() {
+  var w = document.getElementById('vw'); var iframe = w && w.querySelector('iframe'); if (!iframe) return;
+  if (!document.pictureInPictureEnabled || typeof iframe.requestPictureInPicture !== 'function') {
+    var b = document.getElementById('pipb'); if (b) b.style.display = 'none';
+    return;
+  }
+  if (document.pictureInPictureElement === iframe) { try { document.exitPictureInPicture(); } catch (e) {} }
+  else { try { iframe.requestPictureInPicture().catch(function () {}); } catch (e) {} }
+}
 
 function startProg() {
   clearInterval(G.progTimer);
