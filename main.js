@@ -324,10 +324,18 @@ document.addEventListener('MSFullscreenChange', function () { if (!document.msFu
 
 if (tgFSSupported()) {
   tg.onEvent('fullscreenChanged', function () {
-    var w = document.getElementById('vw'); if (w) applyFsState(w, !!tg.isFullscreen);
+    var w = document.getElementById('vw'); if (!w) return;
+    applyFsState(w, !!tg.isFullscreen);
+    // The Telegram "✕" close button can't be hidden, but the BackButton can —
+    // show it while our fullscreen is active so the hardware/system back
+    // gesture exits fullscreen instead of closing the WebApp.
+    try { if (tg.isFullscreen) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
   });
   tg.onEvent('fullscreenFailed', function () {
     var w = document.getElementById('vw'); if (w) cssFS(w);
+  });
+  tg.onEvent('backButtonClicked', function () {
+    if (G.fs) doFS();
   });
 }
 
