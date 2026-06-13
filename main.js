@@ -238,6 +238,31 @@ function initPiP() {
     b.classList.toggle('active', video.webkitPresentationMode === 'picture-in-picture');
   });
 }
+// iOS WKWebView can reject requestPictureInPicture() with "The video element
+// does not support the Picture-in-Picture mode" while playsinline/
+// webkit-playsinline are present on the element. Strip them for the call
+// (and force disablePictureInPicture=false), then restore once it settles.
+function withPiPAttrsRemoved(video, fn) {
+  var hadPlaysinline = video.hasAttribute('playsinline');
+  var hadWebkitPlaysinline = video.getAttribute('webkit-playsinline');
+  video.removeAttribute('playsinline');
+  video.removeAttribute('webkit-playsinline');
+  video.disablePictureInPicture = false;
+  var restore = function () {
+    if (hadPlaysinline) video.setAttribute('playsinline', '');
+    if (hadWebkitPlaysinline !== null) video.setAttribute('webkit-playsinline', hadWebkitPlaysinline);
+  };
+  var result;
+  try {
+    result = fn();
+  } catch (e) {
+    restore();
+    throw e;
+  }
+  if (result && typeof result.finally === 'function') return result.finally(restore);
+  restore();
+  return result;
+}
 function doPiP() {
   if (G.mode !== 'hls' || !G.pipSupported) return;
   var video = G.video;
@@ -246,7 +271,11 @@ function doPiP() {
     return;
   }
   if (document.pictureInPictureElement === video) { try { document.exitPictureInPicture(); } catch (e) {} }
-  else { try { video.requestPictureInPicture().catch(function () {}); } catch (e) {} }
+  else {
+    try {
+      withPiPAttrsRemoved(video, function () { return video.requestPictureInPicture(); }).catch(function () {});
+    } catch (e) {}
+  }
 }
 
 // ─── TEMP: iOS PiP diagnostics ────────────────────────────────────────────
@@ -434,12 +463,43 @@ function testPiP5() {
   alert('5) AVKit/Telegram bridge probe:\n' + msg);
 }
 
+// 6) On iOS, requestPictureInPicture() can reject with "The video element
+// does not support the Picture-in-Picture mode" while playsinline/
+// webkit-playsinline are set. Strip them via withPiPAttrsRemoved(), retry,
+// then restore regardless of outcome.
+function testPiP6() {
+  var v = G.video;
+  var lines = [];
+  lines.push('before: playsinline=' + v.hasAttribute('playsinline') + ', webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
+  if (typeof v.requestPictureInPicture !== 'function') {
+    lines.push('requestPictureInPicture: not available');
+    var msg0 = lines.join('\n');
+    pipLog('6 strip playsinline + retry', msg0);
+    alert('6) strip playsinline + retry requestPictureInPicture:\n' + msg0);
+    return;
+  }
+  withPiPAttrsRemoved(v, function () {
+    lines.push('removed playsinline/webkit-playsinline, disablePictureInPicture=' + v.disablePictureInPicture);
+    return v.requestPictureInPicture().then(function () {
+      lines.push('requestPictureInPicture resolved (entered PiP!)');
+    }).catch(function (e) {
+      lines.push('requestPictureInPicture rejected: ' + e.message);
+    });
+  }).then(function () {
+    lines.push('after: playsinline=' + v.hasAttribute('playsinline') + ', webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
+    var msg = lines.join('\n');
+    pipLog('6 strip playsinline + retry', msg);
+    alert('6) strip playsinline + retry requestPictureInPicture:\n' + msg);
+  });
+}
+
 function testAllPiP() {
   testPiP1();
   testPiP2();
   testPiP3();
   testPiP4();
   testPiP5();
+  testPiP6();
 }
 
 // Builds the G.player dispatcher (delegates to whichever backend is active)
