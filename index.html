@@ -116,7 +116,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
         <button class="rbtn" onclick="doSeek(15);event.stopPropagation()"><svg><use href="#i-fwd"/></svg><span>15</span></button>
       </div>
       <div class="bottom-bar">
-        <div class="pbar" onclick="clickBar(event);event.stopPropagation()"><div class="pfill" id="pf"></div></div>
+        <div class="pbar" onclick="clickBar(event);event.stopPropagation()" onmousedown="pbarStartDrag(event)" ontouchstart="pbarStartDrag(event)"><div class="pfill" id="pf"></div></div>
         <div class="time-row">
           <span class="tdisp"><span id="tc">0:00</span> / <span id="td">0:00</span></span>
           <button class="fsbtn" id="fsb" onclick="doFS();event.stopPropagation()"><svg><use href="#i-fs"/></svg></button>

@@ -13,7 +13,8 @@ var G = {
   topics: [], idx: 0, badgeText: '', backFn: null,
   player: null, ytReady: false, playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
-  currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false
+  currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
+  dragging: false, dragPct: 0
 };
 
 function apiHeaders(extra) {
@@ -145,7 +146,7 @@ function doSeek(d) { if (!G.player || !G.ytReady) return; try { G.player.seekTo(
 function startProg() {
   clearInterval(G.progTimer);
   G.progTimer = setInterval(function () {
-    if (!G.player || !G.ytReady) return;
+    if (!G.player || !G.ytReady || G.dragging) return;
     try {
       var cur = G.player.getCurrentTime(), dur = G.player.getDuration();
       if (!dur) return;
@@ -201,6 +202,52 @@ function clickBar(e) {
   } catch (e) {}
   if (G.playing) scheduleHide();
 }
+
+// ─── Progress bar drag-seek ──────────────────────────────────────────────
+
+function pbarEventPct(e, bar) {
+  var r = bar.getBoundingClientRect();
+  var clientX = (e.touches && e.touches.length) ? e.touches[0].clientX
+    : (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0].clientX : e.clientX;
+  return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+}
+function pbarSegDur() {
+  var segStart = G.segStart || 0;
+  var dur = (G.player && G.ytReady) ? G.player.getDuration() : 0;
+  var segEnd = (G.segEnd && G.segEnd > segStart) ? G.segEnd : dur;
+  return Math.max(1, segEnd - segStart);
+}
+function pbarRenderDrag() {
+  var segDur = pbarSegDur();
+  var pf = document.getElementById('pf'); if (pf) pf.style.width = (G.dragPct * 100) + '%';
+  var tc = document.getElementById('tc'); if (tc) tc.textContent = fmt(G.dragPct * segDur);
+  var td = document.getElementById('td'); if (td) td.textContent = fmt(segDur);
+}
+function pbarStartDrag(e) {
+  if (!G.player || !G.ytReady) return;
+  G.dragging = true;
+  G.dragPct = pbarEventPct(e, e.currentTarget);
+  pbarRenderDrag();
+  e.stopPropagation();
+}
+function pbarMoveDrag(e) {
+  if (!G.dragging) return;
+  var bar = document.querySelector('.pbar'); if (!bar) return;
+  G.dragPct = pbarEventPct(e, bar);
+  pbarRenderDrag();
+  e.preventDefault();
+}
+function pbarEndDrag(e) {
+  if (!G.dragging) return;
+  G.dragging = false;
+  try {
+    var segStart = G.segStart || 0;
+    var target = segStart + G.dragPct * pbarSegDur();
+    G.topicEndShown = false; hideTopicEnd();
+    G.player.seekTo(target, true);
+  } catch (err) {}
+  if (G.playing) scheduleHide();
+}
 function showCtrl(autoHide) { var c = document.getElementById('ctrl'); if (!c) return; c.classList.add('show'); clearTimeout(G.ctrlTimer); if (autoHide !== false && G.playing) scheduleHide(); }
 function hideCtrl() { var c = document.getElementById('ctrl'); if (!c) return; clearTimeout(G.ctrlTimer); c.classList.remove('show'); }
 function scheduleHide() { clearTimeout(G.ctrlTimer); G.ctrlTimer = setTimeout(function () { if (G.playing) hideCtrl(); }, 3500); }
@@ -224,6 +271,12 @@ function applyFsSize(w) { var W = window.innerWidth, H = window.innerHeight; w.s
 function syncFS() { var b = document.getElementById('fsb'); if (!b) return; b.innerHTML = G.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>'; }
 document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement) { G.fs = false; syncFS(); } });
 document.addEventListener('webkitfullscreenchange', function () { if (!document.webkitFullscreenElement) { G.fs = false; syncFS(); } });
+
+document.addEventListener('mousemove', pbarMoveDrag);
+document.addEventListener('mouseup', pbarEndDrag);
+document.addEventListener('touchmove', pbarMoveDrag, { passive: false });
+document.addEventListener('touchend', pbarEndDrag);
+document.addEventListener('touchcancel', pbarEndDrag);
 
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
