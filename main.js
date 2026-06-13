@@ -155,6 +155,8 @@ function setMediaMode(mode) {
   w.classList.toggle('yt-mode', mode === 'yt');
   var b = document.getElementById('pipb');
   if (b) b.style.display = (mode === 'hls' && G.pipSupported) ? '' : 'none';
+  var t = document.getElementById('piptestb');
+  if (t) t.style.display = mode === 'hls' ? '' : 'none';
 }
 
 function loadVideo(vid, startPos) {
@@ -245,6 +247,199 @@ function doPiP() {
   }
   if (document.pictureInPictureElement === video) { try { document.exitPictureInPicture(); } catch (e) {} }
   else { try { video.requestPictureInPicture().catch(function () {}); } catch (e) {} }
+}
+
+// ─── TEMP: iOS PiP diagnostics ────────────────────────────────────────────
+// Exploratory probes for getting real PiP working inside Telegram's iOS
+// WKWebView. "Test PiP" runs each method in turn; every step logs full
+// details to the console and alerts a short summary so results are visible
+// on-device without a remote debugger. Remove this block (and the "Test PiP"
+// button in index.html) once the investigation is done.
+function pipLog(label, msg) {
+  console.log('[PiP test] ' + label + ': ' + msg);
+  return msg;
+}
+
+// 1) video.webkitSetPresentationMode('picture-in-picture') — native Safari API.
+function testPiP1() {
+  var v = G.video;
+  var lines = [];
+  try {
+    lines.push('webkitSupportsPresentationMode: ' + (typeof v.webkitSupportsPresentationMode));
+    if (typeof v.webkitSupportsPresentationMode === 'function') {
+      lines.push('supports(picture-in-picture): ' + v.webkitSupportsPresentationMode('picture-in-picture'));
+    }
+    lines.push('webkitSetPresentationMode: ' + (typeof v.webkitSetPresentationMode));
+    lines.push('webkitPresentationMode before: ' + v.webkitPresentationMode);
+    if (typeof v.webkitSetPresentationMode === 'function') {
+      v.webkitSetPresentationMode('picture-in-picture');
+      lines.push('called set(picture-in-picture), webkitPresentationMode now: ' + v.webkitPresentationMode);
+    }
+  } catch (e) {
+    lines.push('ERROR: ' + (e && e.message || e));
+  }
+  var msg = lines.join('\n');
+  pipLog('1 webkitSetPresentationMode', msg);
+  alert('1) webkitSetPresentationMode:\n' + msg);
+}
+
+// 2) video.webkitEnterFullscreen() — native fullscreen player has its own PiP
+// button on iOS; check whether it's offered.
+function testPiP2() {
+  var v = G.video;
+  var lines = [];
+  try {
+    lines.push('webkitEnterFullscreen: ' + (typeof v.webkitEnterFullscreen));
+    lines.push('webkitSupportsFullscreen: ' + v.webkitSupportsFullscreen);
+    lines.push('webkitDisplayingFullscreen before: ' + v.webkitDisplayingFullscreen);
+    if (typeof v.webkitEnterFullscreen === 'function') {
+      v.webkitEnterFullscreen();
+      lines.push('called webkitEnterFullscreen(), webkitDisplayingFullscreen now: ' + v.webkitDisplayingFullscreen);
+    }
+  } catch (e) {
+    lines.push('ERROR: ' + (e && e.message || e));
+  }
+  var msg = lines.join('\n');
+  pipLog('2 webkitEnterFullscreen', msg);
+  alert('2) webkitEnterFullscreen (check the native fullscreen controls for a PiP icon):\n' + msg);
+}
+
+// 3) playsinline/webkit-playsinline/x-webkit-airplay/disablePictureInPicture
+// attributes, then try requestPictureInPicture() with them set.
+function testPiP3() {
+  var v = G.video;
+  var lines = [];
+  try {
+    v.setAttribute('playsinline', '');
+    v.setAttribute('webkit-playsinline', 'true');
+    v.setAttribute('x-webkit-airplay', 'allow');
+    v.disablePictureInPicture = false;
+    lines.push('playsinline=' + v.hasAttribute('playsinline'));
+    lines.push('webkit-playsinline=' + v.getAttribute('webkit-playsinline'));
+    lines.push('x-webkit-airplay=' + v.getAttribute('x-webkit-airplay'));
+    lines.push('disablePictureInPicture=' + v.disablePictureInPicture);
+    lines.push('document.pictureInPictureEnabled=' + document.pictureInPictureEnabled);
+    lines.push('requestPictureInPicture=' + (typeof v.requestPictureInPicture));
+    if (typeof v.requestPictureInPicture === 'function') {
+      v.requestPictureInPicture().then(function () {
+        pipLog('3 requestPictureInPicture', 'resolved');
+        alert('3) attributes set, requestPictureInPicture() resolved (entered PiP!)\n' + lines.join('\n'));
+      }).catch(function (e) {
+        pipLog('3 requestPictureInPicture', 'rejected: ' + e.message);
+        alert('3) attributes set, requestPictureInPicture() rejected:\n' + e.message + '\n\n' + lines.join('\n'));
+      });
+      return;
+    }
+  } catch (e) {
+    lines.push('ERROR: ' + (e && e.message || e));
+  }
+  var msg = lines.join('\n');
+  pipLog('3 attributes', msg);
+  alert('3) attributes + PiP capability:\n' + msg);
+}
+
+// 4) Clone the stream into a second hidden <video> via captureStream() and
+// try PiP on the clone instead.
+function testPiP4() {
+  var v = G.video;
+  var lines = [];
+  try {
+    lines.push('captureStream: ' + (typeof v.captureStream));
+    lines.push('mozCaptureStream: ' + (typeof v.mozCaptureStream));
+    if (typeof v.captureStream !== 'function') {
+      var msg0 = lines.join('\n');
+      pipLog('4 captureStream', msg0);
+      alert('4) hidden <video> via captureStream:\n' + msg0);
+      return;
+    }
+    var stream = v.captureStream();
+    var hidden = document.createElement('video');
+    hidden.muted = true;
+    hidden.setAttribute('playsinline', '');
+    hidden.srcObject = stream;
+    hidden.style.position = 'fixed';
+    hidden.style.width = '2px';
+    hidden.style.height = '2px';
+    hidden.style.opacity = '0.01';
+    document.body.appendChild(hidden);
+    hidden.play().then(function () {
+      lines.push('hidden video playing from captureStream');
+      var pipCall;
+      if (typeof hidden.webkitSetPresentationMode === 'function') {
+        pipCall = function () { hidden.webkitSetPresentationMode('picture-in-picture'); return Promise.resolve('webkitSetPresentationMode called on clone'); };
+      } else if (typeof hidden.requestPictureInPicture === 'function') {
+        pipCall = function () { return hidden.requestPictureInPicture().then(function () { return 'requestPictureInPicture resolved on clone'; }); };
+      }
+      if (!pipCall) {
+        lines.push('hidden clone has no PiP API either');
+        var msg1 = lines.join('\n');
+        pipLog('4 captureStream', msg1);
+        alert('4) hidden <video> via captureStream:\n' + msg1);
+        document.body.removeChild(hidden);
+        return;
+      }
+      Promise.resolve(pipCall()).then(function (r) {
+        lines.push(r);
+        var msg2 = lines.join('\n');
+        pipLog('4 captureStream', msg2);
+        alert('4) hidden <video> via captureStream:\n' + msg2);
+      }).catch(function (e) {
+        lines.push('PiP on hidden clone error: ' + e.message);
+        var msg3 = lines.join('\n');
+        pipLog('4 captureStream', msg3);
+        alert('4) hidden <video> via captureStream:\n' + msg3);
+      }).finally(function () {
+        try { document.body.removeChild(hidden); } catch (e) {}
+      });
+    }).catch(function (e) {
+      lines.push('hidden video play() error: ' + e.message);
+      var msg4 = lines.join('\n');
+      pipLog('4 captureStream', msg4);
+      alert('4) hidden <video> via captureStream:\n' + msg4);
+      try { document.body.removeChild(hidden); } catch (e2) {}
+    });
+  } catch (e) {
+    lines.push('ERROR: ' + (e && e.message || e));
+    var msg5 = lines.join('\n');
+    pipLog('4 captureStream', msg5);
+    alert('4) hidden <video> via captureStream:\n' + msg5);
+  }
+}
+
+// 5) Probe for any AVKit / native bridge the Telegram WKWebView exposes.
+function testPiP5() {
+  var lines = [];
+  try {
+    lines.push('window.webkit: ' + (typeof window.webkit));
+    if (window.webkit && window.webkit.messageHandlers) {
+      lines.push('messageHandlers: ' + Object.keys(window.webkit.messageHandlers).join(', '));
+    } else {
+      lines.push('messageHandlers: none');
+    }
+    lines.push('TelegramWebviewProxy: ' + (typeof window.TelegramWebviewProxy));
+    var tg = window.Telegram && window.Telegram.WebApp;
+    lines.push('Telegram.WebApp: ' + (tg ? 'present' : 'absent'));
+    if (tg) {
+      lines.push('  version: ' + tg.version);
+      lines.push('  platform: ' + tg.platform);
+      lines.push('  isVersionAtLeast(8.0): ' + (typeof tg.isVersionAtLeast === 'function' ? tg.isVersionAtLeast('8.0') : 'n/a'));
+    }
+    lines.push('video.requestPictureInPicture: ' + (typeof G.video.requestPictureInPicture));
+    lines.push('document.pictureInPictureEnabled: ' + document.pictureInPictureEnabled);
+  } catch (e) {
+    lines.push('ERROR: ' + (e && e.message || e));
+  }
+  var msg = lines.join('\n');
+  pipLog('5 AVKit/Telegram bridge', msg);
+  alert('5) AVKit/Telegram bridge probe:\n' + msg);
+}
+
+function testAllPiP() {
+  testPiP1();
+  testPiP2();
+  testPiP3();
+  testPiP4();
+  testPiP5();
 }
 
 // Builds the G.player dispatcher (delegates to whichever backend is active)
