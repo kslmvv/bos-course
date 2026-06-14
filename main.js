@@ -239,6 +239,9 @@ function initPiP() {
     b.classList.toggle('active', video.webkitPresentationMode === 'picture-in-picture');
   });
 }
+// TEMP: surfaces requestPictureInPicture() outcomes via alert() while we
+// debug "Открыть в браузере" PiP on iOS Safari. Only fires there.
+var PIP_DEBUG = IS_IOS && !!URL_TOKEN;
 function doPiP() {
   if (G.mode !== 'hls' || !G.pipSupported) return;
   var video = G.video;
@@ -246,8 +249,17 @@ function doPiP() {
     video.webkitSetPresentationMode(video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
     return;
   }
-  if (document.pictureInPictureElement === video) { try { document.exitPictureInPicture(); } catch (e) {} }
-  else { try { video.requestPictureInPicture().catch(function () {}); } catch (e) {} }
+  if (document.pictureInPictureElement === video) {
+    try { document.exitPictureInPicture(); } catch (e) { if (PIP_DEBUG) alert('PiP exit error: ' + e.name + ': ' + e.message); }
+    return;
+  }
+  try {
+    video.requestPictureInPicture()
+      .then(function () { if (PIP_DEBUG) alert('PiP: вошёл успешно'); })
+      .catch(function (e) { if (PIP_DEBUG) alert('PiP error: ' + e.name + ': ' + e.message); });
+  } catch (e) {
+    if (PIP_DEBUG) alert('PiP throw: ' + e.name + ': ' + e.message);
+  }
 }
 
 // Builds the G.player dispatcher (delegates to whichever backend is active)
@@ -511,19 +523,6 @@ document.addEventListener('mouseup', pbarEndDrag);
 document.addEventListener('touchmove', pbarMoveDrag, { passive: false });
 document.addEventListener('touchend', pbarEndDrag);
 document.addEventListener('touchcancel', pbarEndDrag);
-
-// Auto-enter PiP when the user leaves the page. Mainly for "Открыть в
-// браузере" mode on iOS Safari (where requestPictureInPicture() works and
-// is allowed from the visibilitychange/pagehide handlers), but harmless
-// elsewhere since it's gated by G.pipSupported.
-function autoPiP() {
-  if (G.mode !== 'hls' || !G.playing || !G.pipSupported) return;
-  try { G.video.requestPictureInPicture().catch(function () {}); } catch (e) {}
-}
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'hidden') autoPiP();
-});
-window.addEventListener('pagehide', autoPiP);
 
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
