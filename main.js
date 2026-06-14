@@ -645,12 +645,6 @@ function buildHome() {
     h += '<div class="dcard" onclick="openDay(' + d.id + ')"><div class="n">' + d.id + '</div><div class="l">' + d.title + '</div><div class="c">' + d.topics.length + ' тем</div></div>';
   });
   h += '</div>';
-  h += '<div class="about-card"><h3>📖 О программе</h3>'
-    + '<p class="about-desc">Курс «Бизнес Операционная Система» от Александра Высоцкого — методология выхода владельца из операционного управления и построения системной компании.</p>'
-    + '<div class="about-row"><span class="ico">🗓</span><span>6 дней · 110 тем</span></div>'
-    + '<div class="about-row"><span class="ico">👤</span><span>Александр Высоцкий — основатель Visotsky Consulting, эксперт по систематизации бизнеса с 20+ летним опытом</span></div>'
-    + '<div class="about-row"><span class="ico">🏆</span><span>Более 1000 выпускников по всему миру</span></div>'
-    + '</div>';
   document.getElementById('s-home').innerHTML = h;
 }
 
