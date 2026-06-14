@@ -524,6 +524,21 @@ document.addEventListener('touchmove', pbarMoveDrag, { passive: false });
 document.addEventListener('touchend', pbarEndDrag);
 document.addEventListener('touchcancel', pbarEndDrag);
 
+// Auto-enter PiP on backgrounding — Android only. Chrome treats
+// visibilitychange/pagehide on tab-switch/minimize as carrying user
+// activation, so requestPictureInPicture() succeeds there; iOS Safari
+// rejects it (NotAllowedError), so this stays gated to !IS_IOS.
+if (!IS_IOS) {
+  function autoPiP() {
+    if (G.mode !== 'hls' || !G.playing || !G.pipSupported) return;
+    try { G.video.requestPictureInPicture().catch(function () {}); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') autoPiP();
+  });
+  window.addEventListener('pagehide', autoPiP);
+}
+
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
   saveProgress(); reportProgress();
