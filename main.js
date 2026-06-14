@@ -172,6 +172,7 @@ function loadVideo(vid, startPos) {
   if (mode === 'hls') {
     loadHlsSrc(vid, startPos);
     G.ready = true;
+    startProg();
   } else if (G.ytReady && G.ytPlayer && G.ytPlayer.loadVideoById) {
     G.ytPlayer.loadVideoById({ videoId: vid, startSeconds: startPos });
     G.ready = true;
@@ -221,12 +222,14 @@ function loadHlsSrc(url, startPos) {
 }
 
 // Real PiP for the <video> element: requestPictureInPicture() on
-// Chromium-based engines (Android). On iOS, Telegram's WKWebView disables
-// allowsPictureInPictureMediaPlayback, so PiP is impossible there — the
-// button stays hidden and "Open in Safari" (#obb) is offered instead.
+// Chromium-based engines (Android) and on iOS Safari (URL_TOKEN browser
+// mode opened via "Open in Safari" — requestPictureInPicture() works there).
+// Inside Telegram's WKWebView on iOS, allowsPictureInPictureMediaPlayback is
+// disabled and PiP is impossible — the button stays hidden there and
+// "Open in Safari" (#obb) is offered instead.
 function initPiP() {
   var video = G.video;
-  G.pipSupported = !IS_IOS && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
+  G.pipSupported = (!IS_IOS || !!URL_TOKEN) && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
     || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture')));
   var b = document.getElementById('pipb');
   if (!b) return;
@@ -545,6 +548,9 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId) {
   } else {
     loadVideo(vid, pos);
   }
+  // In "Открыть в браузере" mode there's no Telegram chrome around the
+  // player, so reveal the controls immediately instead of waiting for a tap.
+  if (URL_TOKEN) showCtrl(false);
 }
 
 function goPrev() {
