@@ -16,6 +16,7 @@ var URL_TOPIC = URL_PARAMS.get('topic');
 
 var SAVE_KEY = 'bos_progress';
 var SPEED_KEY = 'bos_speed';
+var THEME_KEY = 'bos_theme';
 var SPEEDS = [1, 1.5, 2];
 
 var COURSE_DATA = null;
@@ -26,7 +27,7 @@ var G = {
   playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
-  dragging: false, dragPct: 0, fsCoverTimer: null, speed: 1
+  dragging: false, dragPct: 0, fsCoverTimer: null, speed: 1, theme: 'dark'
 };
 
 // True once the currently-loaded backend (HLS <video> or YouTube iframe) can
@@ -141,6 +142,23 @@ function cycleSpeed() {
   try { localStorage.setItem(SPEED_KEY, String(G.speed)); } catch (e) {}
   syncSpeedBtn();
   applySpeed();
+}
+
+// ─── Theme (dark/light) ────────────────────────────────────────────────
+
+function loadTheme() {
+  try { if (localStorage.getItem(THEME_KEY) === 'light') G.theme = 'light'; } catch (e) {}
+}
+function syncThemeBtn() {
+  var b = document.getElementById('themeBtn');
+  if (b) b.innerHTML = '<svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg>';
+}
+function toggleTheme() {
+  G.theme = G.theme === 'light' ? 'dark' : 'light';
+  if (G.theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem(THEME_KEY, G.theme); } catch (e) {}
+  syncThemeBtn();
 }
 
 // ─── YouTube player ──────────────────────────────────────────────────────
@@ -631,7 +649,8 @@ function goTab(t) {
 }
 
 function buildHome() {
-  var h = '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div></div>';
+  var h = '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div>'
+    + '<button class="theme-btn" id="themeBtn" onclick="toggleTheme()"><svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg></button></div>';
   var prog = loadProgress();
   if (prog && prog.type === 'day' && prog.dayId) {
     var posStr = prog.pos > 0 ? ' (' + fmt(prog.pos) + ')' : '';
@@ -770,6 +789,7 @@ window.addEventListener('resize', function () { if (G.fs) { var w = document.get
 // ─── Bootstrap ────────────────────────────────────────────────────────
 
 async function init() {
+  loadTheme();
   if (tg) { tg.ready(); tg.expand(); }
   if (!INIT_DATA && !URL_TOKEN) { showFatalMessage('Откройте приложение через Telegram.'); return; }
   if (!(await loadCourseData())) return;
