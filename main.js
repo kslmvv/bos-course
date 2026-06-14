@@ -631,7 +631,7 @@ function goTab(t) {
 }
 
 function buildHome() {
-  var h = '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система</p></div></div>';
+  var h = '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div></div>';
   var prog = loadProgress();
   if (prog && prog.type === 'day' && prog.dayId) {
     var posStr = prog.pos > 0 ? ' (' + fmt(prog.pos) + ')' : '';
