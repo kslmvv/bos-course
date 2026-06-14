@@ -15,6 +15,8 @@ var URL_DAY = URL_PARAMS.get('day');
 var URL_TOPIC = URL_PARAMS.get('topic');
 
 var SAVE_KEY = 'bos_progress';
+var SPEED_KEY = 'bos_speed';
+var SPEEDS = [1, 1.5, 2];
 
 var COURSE_DATA = null;
 
@@ -24,7 +26,7 @@ var G = {
   playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
-  dragging: false, dragPct: 0, fsCoverTimer: null
+  dragging: false, dragPct: 0, fsCoverTimer: null, speed: 1
 };
 
 // True once the currently-loaded backend (HLS <video> or YouTube iframe) can
@@ -119,6 +121,28 @@ function reportProgress() {
   } catch (e) {}
 }
 
+// ─── Playback speed ──────────────────────────────────────────────────────
+
+function loadSpeed() {
+  try {
+    var s = parseFloat(localStorage.getItem(SPEED_KEY));
+    if (SPEEDS.indexOf(s) >= 0) G.speed = s;
+  } catch (e) {}
+}
+function syncSpeedBtn() {
+  var b = document.getElementById('spb'); if (b) b.textContent = G.speed + 'x';
+}
+function applySpeed() {
+  if (G.mode === 'hls') { try { G.video.playbackRate = G.speed; } catch (e) {} }
+  else if (G.mode === 'yt' && G.ytPlayer && G.ytPlayer.setPlaybackRate) { try { G.ytPlayer.setPlaybackRate(G.speed); } catch (e) {} }
+}
+function cycleSpeed() {
+  G.speed = SPEEDS[(SPEEDS.indexOf(G.speed) + 1) % SPEEDS.length];
+  try { localStorage.setItem(SPEED_KEY, String(G.speed)); } catch (e) {}
+  syncSpeedBtn();
+  applySpeed();
+}
+
 // ─── YouTube player ──────────────────────────────────────────────────────
 
 (function () { var t = document.createElement('script'); t.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(t); })();
@@ -129,7 +153,7 @@ function onYouTubeIframeAPIReady() {
     playerVars: { controls: 0, disablekb: 1, fs: 1, modestbranding: 1, rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1, enablejsapi: 1 },
     events: {
       onReady: function () {
-        if (G.pendingVid) { G.ytPlayer.loadVideoById({ videoId: G.pendingVid, startSeconds: G.pendingPos }); G.pendingVid = null; G.pendingPos = 0; }
+        if (G.pendingVid) { G.ytPlayer.loadVideoById({ videoId: G.pendingVid, startSeconds: G.pendingPos }); G.pendingVid = null; G.pendingPos = 0; applySpeed(); }
       },
       onStateChange: function (e) {
         if (G.mode !== 'yt') return;
@@ -176,6 +200,7 @@ function loadVideo(vid, startPos) {
   } else if (G.ytReady && G.ytPlayer && G.ytPlayer.loadVideoById) {
     G.ytPlayer.loadVideoById({ videoId: vid, startSeconds: startPos });
     G.ready = true;
+    applySpeed();
   } else {
     G.pendingVid = vid; G.pendingPos = startPos;
   }
@@ -189,6 +214,7 @@ function seekWithinVideo(pos) {
   resetPlayerUI();
   try { G.player.seekTo(pos, true); G.player.playVideo(); } catch (e) {}
   G.ready = true;
+  applySpeed();
 }
 
 function doPlay() { if (!playerReady()) return; try { G.playing ? G.player.pauseVideo() : G.player.playVideo(); } catch (e) {} }
@@ -204,6 +230,7 @@ function loadHlsSrc(url, startPos) {
   if (G.hls) { try { G.hls.destroy(); } catch (e) {} G.hls = null; }
   var onReady = function () {
     try { video.currentTime = startPos || 0; } catch (e) {}
+    applySpeed();
     video.play().catch(function () {});
   };
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -267,6 +294,8 @@ function doPiP() {
 // handling above.
 function initPlayer() {
   G.video = document.getElementById('vplayer');
+  loadSpeed();
+  syncSpeedBtn();
   G.player = {
     getCurrentTime: function () {
       if (G.mode === 'hls') return G.video.currentTime || 0;

@@ -75,6 +75,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .fsgrp{display:flex;align-items:center;gap:14px}
 .fsbtn svg{width:20px;height:20px;fill:#fff}
 .fsbtn.active svg{fill:var(--acc)}
+.spbtn{font-size:12px;font-weight:700;color:var(--acc);justify-content:center;min-width:28px}
 .vwrap.fs{position:fixed!important;top:0;left:0;z-index:9999;border-radius:0;margin:0;background:#000}
 .vwrap.fs .ytop,.vwrap.fs .ybot{display:none}
 .vwrap.fs iframe,.vwrap.fs video{position:absolute;top:0;left:0;border:none!important;pointer-events:none;object-fit:contain}
@@ -131,6 +132,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
         <div class="time-row">
           <span class="tdisp"><span id="tc">0:00</span> / <span id="td">0:00</span></span>
           <div class="fsgrp">
+            <button class="fsbtn spbtn" id="spb" onclick="cycleSpeed();event.stopPropagation()">1x</button>
             <button class="fsbtn" id="obb" onclick="openInBrowser();event.stopPropagation()"><svg><use href="#i-ext"/></svg></button>
             <button class="fsbtn" id="pipb" onclick="doPiP();event.stopPropagation()"><svg><use href="#i-pip"/></svg></button>
             <button class="fsbtn" id="fsb" onclick="doFS();event.stopPropagation()"><svg><use href="#i-fs"/></svg></button>
