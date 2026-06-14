@@ -287,6 +287,10 @@ function initPiP() {
   var video = G.video;
   G.pipSupported = (!IS_IOS || !!URL_TOKEN) && (!!(document.pictureInPictureEnabled && video.requestPictureInPicture)
     || (typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture')));
+  // TEMP DEBUG (PiP on Android) — remove after diagnosing.
+  console.log('[PiP debug] IS_IOS=' + IS_IOS + ' pictureInPictureEnabled=' + document.pictureInPictureEnabled
+    + ' requestPictureInPicture=' + (typeof video.requestPictureInPicture) + ' pipSupported=' + G.pipSupported);
+  alert('pipSupported: ' + G.pipSupported + ', IS_IOS: ' + IS_IOS + ', pipEnabled: ' + document.pictureInPictureEnabled);
   var b = document.getElementById('pipb');
   if (!b) return;
   video.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
