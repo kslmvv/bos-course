@@ -501,12 +501,48 @@ function fsCoverOff() {
   var c = document.getElementById('ctrl'); if (c) c.classList.remove('fscover');
 }
 
+// Applies the result of a standard Fullscreen API request: if the element
+// actually entered fullscreen, syncs G.fs/icon and resizes the active media;
+// otherwise falls back to the CSS-only fake fullscreen.
+function onFsEnterResult(w) {
+  var nowFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  if (nowFs) {
+    G.fs = true; syncFS();
+    var media = activeMediaEl(w);
+    if (media) media.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+  } else {
+    cssFS(w);
+  }
+}
 function doFS() {
   var w = document.getElementById('vw'); if (!w) return;
   if (tgFSSupported()) {
     if (G.fs) { try { tg.exitFullscreen(); } catch (e) {} return; }
     fsCoverOn();
     try { tg.requestFullscreen(); } catch (e) { fsCoverOff(); }
+    return;
+  }
+  if (URL_TOKEN) {
+    // Browser mode: use the standard Fullscreen API on the video container.
+    // On iOS Safari (no Element.requestFullscreen), fall back to the
+    // native <video> fullscreen via webkitEnterFullscreen().
+    if (document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (e) {}
+      return;
+    }
+    var video = G.video;
+    var fallback = function () {
+      if (video && typeof video.webkitEnterFullscreen === 'function') { try { video.webkitEnterFullscreen(); } catch (e) {} }
+      else { cssFS(w); }
+    };
+    if (typeof w.requestFullscreen !== 'function') { fallback(); return; }
+    var result;
+    try { result = w.requestFullscreen(); } catch (e) { fallback(); return; }
+    if (result && typeof result.then === 'function') {
+      result.then(function () { setTimeout(function () { onFsEnterResult(w); }, 100); }).catch(fallback);
+    } else {
+      setTimeout(function () { onFsEnterResult(w); }, 100);
+    }
     return;
   }
   var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
@@ -519,20 +555,10 @@ function doFS() {
   if (tg && tg.expand) { try { tg.expand(); } catch (e) {} }
   var req = w.requestFullscreen || w.webkitRequestFullscreen || w.mozRequestFullScreen || w.msRequestFullscreen;
   if (!req) { cssFS(w); return; }
-  var onEnter = function () {
-    var nowFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-    if (nowFs) {
-      G.fs = true; syncFS();
-      var media = activeMediaEl(w);
-      if (media) media.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-    } else {
-      cssFS(w);
-    }
-  };
-  var result;
-  try { result = req.call(w); } catch (e) { cssFS(w); return; }
-  if (result && typeof result.then === 'function') { result.then(function () { setTimeout(onEnter, 100); }).catch(function () { cssFS(w); }); }
-  else { setTimeout(onEnter, 100); }
+  var result2;
+  try { result2 = req.call(w); } catch (e) { cssFS(w); return; }
+  if (result2 && typeof result2.then === 'function') { result2.then(function () { setTimeout(function () { onFsEnterResult(w); }, 100); }).catch(function () { cssFS(w); }); }
+  else { setTimeout(function () { onFsEnterResult(w); }, 100); }
 }
 function applyFsState(w, isFs) {
   G.fs = isFs; w.classList.toggle('fs', G.fs);
