@@ -512,6 +512,19 @@ document.addEventListener('touchmove', pbarMoveDrag, { passive: false });
 document.addEventListener('touchend', pbarEndDrag);
 document.addEventListener('touchcancel', pbarEndDrag);
 
+// Auto-enter PiP when the user leaves the page. Mainly for "Открыть в
+// браузере" mode on iOS Safari (where requestPictureInPicture() works and
+// is allowed from the visibilitychange/pagehide handlers), but harmless
+// elsewhere since it's gated by G.pipSupported.
+function autoPiP() {
+  if (G.mode !== 'hls' || !G.playing || !G.pipSupported) return;
+  try { G.video.requestPictureInPicture().catch(function () {}); } catch (e) {}
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') autoPiP();
+});
+window.addEventListener('pagehide', autoPiP);
+
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
   saveProgress(); reportProgress();
