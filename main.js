@@ -50,7 +50,9 @@ function apiHeaders(extra) {
 }
 
 function reportStats(day, topic, progress) {
-  fetch(API_BASE + '/api/stats', {
+  var url = API_BASE + '/api/stats';
+  if (URL_TOKEN) url += '?token=' + encodeURIComponent(URL_TOKEN);
+  fetch(url, {
     method: 'POST',
     headers: apiHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ day: day, topic: topic, progress: Math.max(0, Math.floor(progress || 0)) })
@@ -176,7 +178,7 @@ function onYouTubeIframeAPIReady() {
       onStateChange: function (e) {
         if (G.mode !== 'yt') return;
         G.playing = (e.data === YT.PlayerState.PLAYING);
-        if (G.playing) { G.ready = true; startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
+        if (G.playing) { G.ready = true; applySpeed(); startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
         else { clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); }
         syncPB();
       }
@@ -233,6 +235,7 @@ function seekWithinVideo(pos) {
   try { G.player.seekTo(pos, true); G.player.playVideo(); } catch (e) {}
   G.ready = true;
   applySpeed();
+  startProg();
 }
 
 function doPlay() { if (!playerReady()) return; try { G.playing ? G.player.pauseVideo() : G.player.playVideo(); } catch (e) {} }
@@ -258,6 +261,14 @@ function loadHlsSrc(url, startPos) {
     var hls = new window.Hls();
     G.hls = hls;
     hls.on(window.Hls.Events.MANIFEST_PARSED, onReady);
+    hls.on(window.Hls.Events.ERROR, function (evt, data) {
+      if (!data.fatal) return;
+      switch (data.type) {
+        case window.Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
+        case window.Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
+        default: try { hls.destroy(); } catch (e) {} G.hls = null;
+      }
+    });
     hls.loadSource(url);
     hls.attachMedia(video);
   } else {
@@ -371,7 +382,7 @@ function startProg() {
       var pf = document.getElementById('pf'); if (pf) pf.style.width = (segCur / segDur * 100) + '%';
       var tc = document.getElementById('tc'); if (tc) tc.textContent = fmt(segCur);
       var td = document.getElementById('td'); if (td) td.textContent = fmt(segDur);
-      if (G.segEnd && cur >= G.segEnd - 0.4 && !G.topicEndShown) {
+      if (cur >= segEnd - 0.4 && !G.topicEndShown) {
         G.topicEndShown = true;
         showTopicEnd();
       }
@@ -383,8 +394,10 @@ function hideTopicEnd() {
 }
 function showTopicEnd() {
   try { if (G.player && G.playing) G.player.pauseVideo(); } catch (e) {}
-  var segDur = (G.segEnd && G.segEnd > G.segStart) ? (G.segEnd - G.segStart) : null;
-  reportStats(G.badgeText, topicLabel(G.idx), segDur != null ? segDur : 0);
+  var segStart = G.segStart || 0;
+  var dur = 0; try { dur = G.player.getDuration(); } catch (e) {}
+  var segEnd = (G.segEnd && G.segEnd > segStart) ? G.segEnd : dur;
+  reportStats(G.badgeText, topicLabel(G.idx), Math.max(0, segEnd - segStart));
   var o = document.getElementById('topic-end'); if (!o) return;
   var hasNext = G.idx < G.topics.length - 1;
   var nb = document.getElementById('te-next');
@@ -721,7 +734,10 @@ function buildTools() {
 }
 function openTool(i) {
   var t = COURSE_DATA.tools[i];
-  if (t.playlistUrl) { window.open(t.playlistUrl, '_blank'); }
+  if (t.playlistUrl) {
+    if (tg && tg.openLink) tg.openLink(t.playlistUrl, { try_instant_view: false });
+    else window.open(t.playlistUrl, '_blank');
+  }
   else if (t.topics && t.topics.length > 0) { openPlayer(t.topics, 0, t.title.toUpperCase(), function () { goTab('tools'); }); }
 }
 
