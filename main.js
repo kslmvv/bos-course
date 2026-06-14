@@ -290,7 +290,6 @@ function initPiP() {
   // TEMP DEBUG (PiP on Android) — remove after diagnosing.
   console.log('[PiP debug] IS_IOS=' + IS_IOS + ' pictureInPictureEnabled=' + document.pictureInPictureEnabled
     + ' requestPictureInPicture=' + (typeof video.requestPictureInPicture) + ' pipSupported=' + G.pipSupported);
-  alert('pipSupported: ' + G.pipSupported + ', IS_IOS: ' + IS_IOS + ', pipEnabled: ' + document.pictureInPictureEnabled);
   var b = document.getElementById('pipb');
   if (!b) return;
   video.addEventListener('enterpictureinpicture', function () { b.classList.add('active'); });
@@ -319,6 +318,130 @@ function doPiP() {
       .catch(function (e) { if (PIP_DEBUG) alert('PiP error: ' + e.name + ': ' + e.message); });
   } catch (e) {
     if (PIP_DEBUG) alert('PiP throw: ' + e.name + ': ' + e.message);
+  }
+}
+
+// TEMP DEBUG (Android PiP) — 5 experimental ways to unlock PiP inside
+// Telegram's Android WebView, each wired to a "Test Android PiP N" button.
+// Remove this whole block (and the buttons in index.html) once diagnosed.
+function pipFlagsStr() {
+  return 'pictureInPictureEnabled=' + document.pictureInPictureEnabled
+    + ', requestPictureInPicture=' + (typeof G.video.requestPictureInPicture);
+}
+
+// 1) MediaSession API — sometimes triggers Android's system media
+// notification/controller, which on some OEMs offers its own PiP affordance.
+function testPiP1() {
+  try {
+    if (!('mediaSession' in navigator)) { alert('Test 1: navigator.mediaSession недоступен'); return; }
+    navigator.mediaSession.metadata = new MediaMetadata({ title: 'БОС Курс', artist: 'Test PiP 1' });
+    navigator.mediaSession.setActionHandler('play', function () { try { G.player.playVideo(); } catch (e) {} });
+    navigator.mediaSession.setActionHandler('pause', function () { try { G.player.pauseVideo(); } catch (e) {} });
+    try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+    alert('Test 1: mediaSession metadata/handlers установлены.\n' + pipFlagsStr() + '\nСверните Telegram и проверьте уведомление/панель управления.');
+  } catch (e) {
+    alert('Test 1 error: ' + e.name + ': ' + e.message);
+  }
+}
+
+// 2) requestFullscreen() on the <video> itself (not a wrapper div) — native
+// fullscreen video players on some Android WebViews expose PiP on backgrounding.
+function testPiP2() {
+  try {
+    var video = G.video;
+    var fn = video.requestFullscreen || video.webkitRequestFullscreen || video.webkitEnterFullscreen;
+    if (!fn) { alert('Test 2: requestFullscreen на <video> недоступен'); return; }
+    var result = fn.call(video);
+    if (result && typeof result.then === 'function') {
+      result.then(function () { alert('Test 2: video fullscreen — успех.\n' + pipFlagsStr()); })
+            .catch(function (e) { alert('Test 2 error: ' + e.name + ': ' + e.message); });
+    } else {
+      setTimeout(function () { alert('Test 2: вызван video fullscreen (sync API).\n' + pipFlagsStr()); }, 300);
+    }
+  } catch (e) {
+    alert('Test 2 error: ' + e.name + ': ' + e.message);
+  }
+}
+
+// 3) captureStream() into a second, hidden <video> — tests whether a
+// MediaStream-backed element gets PiP rights the source element doesn't.
+function testPiP3() {
+  try {
+    var src = G.video;
+    var capture = src.captureStream || src.mozCaptureStream;
+    if (typeof capture !== 'function') { alert('Test 3: captureStream() недоступен'); return; }
+    var stream = capture.call(src);
+    var v2 = document.createElement('video');
+    v2.muted = true; v2.playsInline = true;
+    v2.srcObject = stream;
+    v2.style.position = 'fixed'; v2.style.left = '-9999px'; v2.style.width = '2px'; v2.style.height = '2px';
+    document.body.appendChild(v2);
+    v2.play().then(function () {
+      if (typeof v2.requestPictureInPicture !== 'function') {
+        alert('Test 3: requestPictureInPicture на captureStream-видео недоступен.\n' + pipFlagsStr());
+        v2.remove();
+        return;
+      }
+      v2.requestPictureInPicture()
+        .then(function () { alert('Test 3: PiP через captureStream — УСПЕХ!'); })
+        .catch(function (e) { alert('Test 3 error: ' + e.name + ': ' + e.message); v2.remove(); });
+    }).catch(function (e) { alert('Test 3 play() error: ' + e.name + ': ' + e.message); v2.remove(); });
+  } catch (e) {
+    alert('Test 3 error: ' + e.name + ': ' + e.message);
+  }
+}
+
+// 4) Probe Telegram's Android JS bridge for any video/PiP-related hooks.
+function testPiP4() {
+  try {
+    var lines = [];
+    if (window.TelegramWebviewProxy) {
+      var names = [];
+      try { names = names.concat(Object.getOwnPropertyNames(window.TelegramWebviewProxy)); } catch (e) {}
+      for (var k in window.TelegramWebviewProxy) { if (names.indexOf(k) === -1) names.push(k); }
+      lines.push('TelegramWebviewProxy: ' + (names.length ? names.join(', ') : '(методы не перечисляются)'));
+      lines.push('postEvent: ' + (typeof window.TelegramWebviewProxy.postEvent));
+    } else {
+      lines.push('TelegramWebviewProxy: нет');
+    }
+    if (window.webkit && window.webkit.messageHandlers) {
+      lines.push('webkit.messageHandlers: ' + Object.keys(window.webkit.messageHandlers).join(', '));
+    } else {
+      lines.push('webkit.messageHandlers: нет');
+    }
+    lines.push('external.notify: ' + (window.external && typeof window.external.notify));
+    lines.push('Telegram.WebApp version: ' + (tg && tg.version));
+    alert('Test 4:\n' + lines.join('\n'));
+  } catch (e) {
+    alert('Test 4 error: ' + e.name + ': ' + e.message);
+  }
+}
+
+// 5) Drop playsinline/webkit-playsinline before play() — on some engines
+// non-inline playback gets a native player with PiP.
+function testPiP5() {
+  try {
+    var video = G.video;
+    video.removeAttribute('playsinline');
+    video.removeAttribute('webkit-playsinline');
+    video.playsInline = false;
+    var resume = !video.paused;
+    video.pause();
+    video.play().then(function () {
+      alert('Test 5: playsInline=false, play() ok.\n' + pipFlagsStr());
+      // restore normal inline playback
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.playsInline = true;
+    }).catch(function (e) {
+      alert('Test 5 play() error: ' + e.name + ': ' + e.message);
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.playsInline = true;
+      if (resume) video.play().catch(function () {});
+    });
+  } catch (e) {
+    alert('Test 5 error: ' + e.name + ': ' + e.message);
   }
 }
 
