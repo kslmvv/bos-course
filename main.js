@@ -99,7 +99,7 @@ function saveProgress() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       badgeText: G.badgeText, idx: G.idx, pos: pos,
       title: G.topics[G.idx] ? G.topics[G.idx].title : '',
-      type: G.badgeText.indexOf('ДЕНЬ') >= 0 ? 'day' : 'other',
+      type: G.badgeText === 'ДОРОЖНАЯ КАРТА' ? 'roadmap' : (G.badgeText.indexOf('ДЕНЬ') >= 0 ? 'day' : 'other'),
       dayId: G.badgeText.indexOf('ДЕНЬ') >= 0 ? parseInt(G.badgeText.replace('ДЕНЬ ', '')) : null
     }));
   } catch (e) {}
@@ -696,12 +696,22 @@ function buildHome() {
       + '<div class="continue-title">' + prog.badgeText + ' — Тема ' + (prog.idx + 1) + posStr + '<br><span style="font-size:13px;font-weight:400;color:var(--tx2)">' + prog.title + '</span></div>'
       + '<div class="continue-btns"><button class="cbtn-cont" onclick="continueWatch(event)">Продолжить</button>'
       + '<button class="cbtn-new" onclick="startNew(event)">С начала</button></div></div>';
+  } else if (prog && prog.type === 'roadmap') {
+    var rmPosStr = prog.pos > 0 ? ' (' + fmt(prog.pos) + ')' : '';
+    h += '<div class="continue-card"><div class="continue-label">▶ Продолжить просмотр</div>'
+      + '<div class="continue-title">ДОРОЖНАЯ КАРТА — Тема ' + (prog.idx + 1) + rmPosStr + '<br><span style="font-size:13px;font-weight:400;color:var(--tx2)">' + prog.title + '</span></div>'
+      + '<div class="continue-btns"><button class="cbtn-cont" onclick="continueRoadmap(event)">Продолжить</button>'
+      + '<button class="cbtn-new" onclick="startNew(event)">С начала</button></div></div>';
   }
   h += '<div class="stitle">Программа курса</div><div class="grid">';
   COURSE_DATA.days.forEach(function (d) {
     h += '<div class="dcard" onclick="openDay(' + d.id + ')"><div class="n">' + d.id + '</div><div class="l">' + d.title + '</div><div class="c">' + d.topics.length + ' тем</div></div>';
   });
   h += '</div>';
+  if (COURSE_DATA.roadmap) {
+    h += '<div class="stitle">Дорожная карта</div>';
+    h += '<div class="bcard" onclick="openRoadmap()"><div class="bico">🗺</div><div class="binfo"><h3>' + COURSE_DATA.roadmap.title + '</h3><p>' + COURSE_DATA.roadmap.topics.length + ' тем · 12 шагов системного бизнеса</p></div><div class="barrow">▶</div></div>';
+  }
   document.getElementById('s-home').innerHTML = h;
 }
 
@@ -711,6 +721,12 @@ function continueWatch(e) {
   if (!day) return;
   var sp = prog.pos || day.topics[prog.idx].startSeconds || 0;
   openPlayer(day.topics, prog.idx, 'ДЕНЬ ' + prog.dayId, function () { openDay(prog.dayId); }, sp, day.videoHlsUrl);
+}
+function continueRoadmap(e) {
+  e.stopPropagation(); var prog = loadProgress(); if (!prog || prog.type !== 'roadmap') return;
+  var rm = COURSE_DATA.roadmap; if (!rm) return;
+  var sp = prog.pos || rm.topics[prog.idx].startSeconds || 0;
+  openPlayer(rm.topics, prog.idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, sp, rm.videoId);
 }
 function startNew(e) { e.stopPropagation(); clearProgress(); buildHome(); }
 
@@ -735,6 +751,24 @@ function openDayVideo(dayId, idx) {
   if (!day) return;
   var startPos = day.topics[idx].startSeconds || 0;
   openPlayer(day.topics, idx, 'ДЕНЬ ' + dayId, function () { openDay(dayId); }, startPos, day.videoHlsUrl);
+}
+function openRoadmap() {
+  var rm = COURSE_DATA.roadmap;
+  var h = '<div class="back" onclick="goHome()">← Назад</div>'
+    + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">Дорожная карта</div>'
+    + '<div style="color:var(--tx2);font-size:13px;margin-top:4px">' + rm.title + '</div></div><div class="tlist">';
+  rm.topics.forEach(function (tp, i) {
+    h += '<div class="titem" onclick="openRoadmapVideo(' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + '</div></div>';
+  });
+  document.getElementById('s-days').innerHTML = h + '</div>';
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  document.getElementById('s-days').classList.add('on'); document.getElementById('n-home').classList.add('on');
+}
+function openRoadmapVideo(idx) {
+  var rm = COURSE_DATA.roadmap;
+  var startPos = rm.topics[idx].startSeconds || 0;
+  openPlayer(rm.topics, idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, startPos, rm.videoId);
 }
 function goHome() {
   stopVideo();
@@ -773,6 +807,7 @@ function currentSectionKey() {
   if (m) return 'day-' + m[1];
   m = /^БОНУС (\d+)$/.exec(G.badgeText);
   if (m) return 'bonus-' + (parseInt(m[1], 10) - 1);
+  if (G.badgeText === 'ДОРОЖНАЯ КАРТА') return 'roadmap';
   if (COURSE_DATA && COURSE_DATA.tools) {
     for (var i = 0; i < COURSE_DATA.tools.length; i++) {
       if (COURSE_DATA.tools[i].title.toUpperCase() === G.badgeText) return 'tool-' + i;
@@ -803,6 +838,12 @@ function openFromParams(sectionKey, topicIdx) {
     var t = COURSE_DATA.tools[parseInt(m[1], 10)];
     if (!t || !t.topics || !t.topics[idx]) return false;
     openPlayer(t.topics, idx, t.title.toUpperCase(), function () { goTab('tools'); });
+    return true;
+  }
+  if (sectionKey === 'roadmap') {
+    var rm = COURSE_DATA.roadmap;
+    if (!rm || !rm.topics[idx]) return false;
+    openPlayer(rm.topics, idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, rm.topics[idx].startSeconds || 0, rm.videoId);
     return true;
   }
   return false;
