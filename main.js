@@ -20,6 +20,15 @@ var THEME_KEY = 'bos_theme';
 var SPEEDS = [1, 1.5, 2];
 
 var COURSE_DATA = null;
+var CURRENT_COURSE_ID = null;
+var MY_COURSES = [];
+
+// Per-course "continue watching" key. Keeps the pre-existing 'bos_progress'
+// key for the "bos" course so users don't lose their saved position across
+// this update; any future course gets its own namespaced key.
+function progressKey() {
+  return CURRENT_COURSE_ID && CURRENT_COURSE_ID !== 'bos' ? SAVE_KEY + '_' + CURRENT_COURSE_ID : SAVE_KEY;
+}
 
 var G = {
   topics: [], idx: 0, badgeText: '', backFn: null,
@@ -70,11 +79,11 @@ function showFatalMessage(text) {
     '<div style="font-size:40px;margin-bottom:16px">🔒</div><div>' + text + '</div></div>';
 }
 
-async function loadCourseData() {
+async function loadCourseData(courseId) {
   try {
-    var url = API_BASE + '/api/course';
+    var url = API_BASE + '/api/course?course_id=' + encodeURIComponent(courseId);
     var opts = {};
-    if (URL_TOKEN) { url += '?token=' + encodeURIComponent(URL_TOKEN); }
+    if (URL_TOKEN) { url += '&token=' + encodeURIComponent(URL_TOKEN); }
     else { opts.headers = apiHeaders(); }
     var res = await fetch(url, opts);
     if (res.status === 401 || res.status === 403) {
@@ -96,7 +105,7 @@ function saveProgress() {
   try {
     var pos = 0;
     if (playerReady() && G.ready) { try { pos = Math.floor(G.player.getCurrentTime() || 0); } catch (e) {} }
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
+    localStorage.setItem(progressKey(), JSON.stringify({
       badgeText: G.badgeText, idx: G.idx, pos: pos,
       title: G.topics[G.idx] ? G.topics[G.idx].title : '',
       type: G.badgeText === 'ДОРОЖНАЯ КАРТА' ? 'roadmap' : (G.badgeText.indexOf('ДЕНЬ') >= 0 ? 'day' : 'other'),
@@ -104,8 +113,8 @@ function saveProgress() {
     }));
   } catch (e) {}
 }
-function loadProgress() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
-function clearProgress() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+function loadProgress() { try { return JSON.parse(localStorage.getItem(progressKey()) || 'null'); } catch (e) { return null; } }
+function clearProgress() { try { localStorage.removeItem(progressKey()); } catch (e) {} }
 function startSaveTimer() {
   clearInterval(G.saveTimer);
   G.saveTimer = setInterval(function () { if (G.playing) saveProgress(); }, 5000);
@@ -687,7 +696,8 @@ function goTab(t) {
 }
 
 function buildHome() {
-  var h = '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div>'
+  var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
+    + '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div>'
     + '<button class="theme-btn" id="themeBtn" onclick="toggleTheme()"><svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg></button></div>';
   var prog = loadProgress();
   if (prog && prog.type === 'day' && prog.dayId) {
@@ -868,16 +878,102 @@ async function openInBrowser() {
 window.addEventListener('orientationchange', function () { setTimeout(function () { var w = document.getElementById('vw'); if (w && G.fs) applyFsSize(w); }, 400); });
 window.addEventListener('resize', function () { if (G.fs) { var w = document.getElementById('vw'); if (w) applyFsSize(w); } });
 
+// ─── "Мои курсы" (course picker) ────────────────────────────────────────
+
+function setNavVisible(visible) {
+  var nav = document.querySelector('.nav'); if (!nav) return;
+  nav.classList.toggle('hidden', !visible);
+}
+
+function buildMyCourses(courses, isAdmin) {
+  var h = '<div class="mc-hdr"><div><h1>Мои курсы</h1><p>BilimBook</p></div>';
+  if (isAdmin) h += '<button class="admin-btn" onclick="goAdmin()" title="Админ-панель">⚙️</button>';
+  h += '</div>';
+  if (!courses || !courses.length) {
+    h += '<div class="empty-state">Пока нет доступных курсов.<br>Обратитесь к администратору.</div>';
+  } else {
+    courses.forEach(function (c) {
+      h += '<div class="course-card" onclick="selectCourse(\'' + c.id + '\')">'
+        + '<div class="course-ico">' + (c.icon || '📚') + '</div>'
+        + '<div class="course-info"><h3>' + c.title + '</h3>' + (c.subtitle ? '<p>' + c.subtitle + '</p>' : '') + '</div>'
+        + '<div class="course-arrow">▶</div></div>';
+    });
+  }
+  document.getElementById('s-mycourses').innerHTML = h;
+}
+
+async function initMyCoursesScreen() {
+  var adminCheck = fetch(API_BASE + '/api/admin/users', { headers: apiHeaders() })
+    .then(function (r) { return r.ok; })
+    .catch(function () { return false; });
+
+  var mcRes;
+  try {
+    mcRes = await fetch(API_BASE + '/api/my-courses', { headers: apiHeaders() });
+  } catch (e) {
+    showFatalMessage('Не удалось загрузить список курсов. Проверьте соединение и попробуйте снова.');
+    return;
+  }
+  if (mcRes.status === 401) {
+    showFatalMessage('Доступ запрещён. Откройте приложение через бота командой /start.');
+    return;
+  }
+  if (!mcRes.ok) {
+    showFatalMessage('Не удалось загрузить список курсов. Проверьте соединение и попробуйте снова.');
+    return;
+  }
+  MY_COURSES = await mcRes.json();
+  var isAdmin = await adminCheck;
+  buildMyCourses(MY_COURSES, isAdmin);
+}
+
+async function selectCourse(courseId) {
+  CURRENT_COURSE_ID = courseId;
+  if (!(await loadCourseData(courseId))) return;
+  buildHome(); buildBonus(); buildTools();
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.getElementById('s-home').classList.add('on');
+  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  document.getElementById('n-home').classList.add('on');
+  setNavVisible(true);
+}
+
+function backToMyCourses() {
+  stopVideo();
+  CURRENT_COURSE_ID = null;
+  COURSE_DATA = null;
+  setNavVisible(false);
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  document.getElementById('s-mycourses').classList.add('on');
+}
+
+function goAdmin() {
+  location.href = 'admin.html' + location.hash;
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────
 
 async function init() {
   loadTheme();
   if (tg) { tg.ready(); tg.expand(); }
   if (!INIT_DATA && !URL_TOKEN) { showFatalMessage('Откройте приложение через Telegram.'); return; }
-  if (!(await loadCourseData())) return;
-  buildHome(); buildBonus(); buildTools();
-  var ob = document.getElementById('obb');
-  if (ob && URL_TOKEN) ob.style.display = 'none';
-  if (URL_TOKEN) openFromParams(URL_DAY, URL_TOPIC);
+
+  if (URL_TOKEN) {
+    // "Открыть в браузере" deep link: skip the course picker and go
+    // straight into the course/topic it was generated for.
+    CURRENT_COURSE_ID = 'bos';
+    if (!(await loadCourseData(CURRENT_COURSE_ID))) return;
+    buildHome(); buildBonus(); buildTools();
+    document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById('s-home').classList.add('on');
+    setNavVisible(true);
+    var ob = document.getElementById('obb');
+    if (ob) ob.style.display = 'none';
+    openFromParams(URL_DAY, URL_TOPIC);
+    return;
+  }
+
+  await initMyCoursesScreen();
 }
 init();

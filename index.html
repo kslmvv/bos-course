@@ -39,6 +39,18 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 .cbtn-cont{flex:1;padding:10px;background:var(--acc);color:#000;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;text-align:center}
 .cbtn-new{flex:1;padding:10px;background:transparent;color:var(--tx2);font-size:13px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;text-align:center;transition:border-color .3s}
 .back{color:var(--acc);font-size:15px;cursor:pointer;margin-bottom:16px;display:inline-block}
+.nav.hidden{display:none}
+.mc-hdr{display:flex;align-items:center;justify-content:space-between;padding:20px 0 8px}
+.mc-hdr h1{font-size:26px;font-weight:700}
+.mc-hdr p{color:var(--tx2);font-size:13px;margin-top:2px}
+.admin-btn{width:36px;height:36px;border-radius:50%;background:var(--sur2);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;flex-shrink:0;transition:background .3s}
+.course-card{background:var(--sur);border-radius:var(--r);padding:18px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:14px;border:1px solid var(--bd);transition:background .3s,border-color .3s}
+.course-card:active{background:var(--sur2)}
+.course-ico{font-size:30px;width:52px;height:52px;border-radius:var(--r);background:var(--sur2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.course-info h3{font-size:16px;font-weight:600}
+.course-info p{color:var(--tx2);font-size:13px;margin-top:3px}
+.course-arrow{margin-left:auto;color:var(--tx2);font-size:18px}
+.empty-state{text-align:center;padding:60px 20px;color:var(--tx2)}
 .tlist{display:flex;flex-direction:column;gap:8px}
 .titem{background:var(--sur);border-radius:var(--r);padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1px solid var(--bd);transition:background .3s,border-color .3s}
 .titem:active{background:var(--sur2)}
@@ -107,7 +119,8 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 </style>
 </head>
 <body>
-<div id="s-home" class="sc on"><div style="padding:40px 20px;text-align:center;color:var(--tx2)">Загрузка курса…</div></div>
+<div id="s-mycourses" class="sc on"><div style="padding:40px 20px;text-align:center;color:var(--tx2)">Загрузка курсов…</div></div>
+<div id="s-home" class="sc"></div>
 <div id="s-days" class="sc"></div>
 <div id="s-bonus" class="sc"></div>
 <div id="s-tools" class="sc"></div>
@@ -155,7 +168,7 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
     <button class="nbtn nx" id="btn-next" onclick="goNext()">Следующее →</button>
   </div>
 </div>
-<nav class="nav">
+<nav class="nav hidden">
   <div class="ni on" id="n-home" onclick="goTab('home')"><i>📚</i>Курс</div>
   <div class="ni" id="n-bonus" onclick="goTab('bonus')"><i>🎁</i>Бонусы</div>
   <div class="ni" id="n-tools" onclick="goTab('tools')"><i>🛠</i>Инструменты</div>
