@@ -12,7 +12,7 @@ var INIT_DATA = tg ? tg.initData : '';
 // /api/courses list endpoint yet, so this is kept in sync by hand until a
 // future Этап adds one.
 var ADMIN_COURSES = [
-  { id: 'bos', title: 'БОС Курс', icon: '📚' },
+  { id: 'bos', title: 'БОС Курс', icon: 'logo.jpg' },
   { id: 'roadmap', title: 'Дорожная карта: 12 шагов (live)', icon: 'roadmap_icon.png' }
 ];
 
