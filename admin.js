@@ -63,7 +63,10 @@ async function loadUsers() {
 
 function renderUserList() {
   var h = '<div class="hdr hdr-row"><div><div class="back" onclick="goBack()">← Назад</div><h1>Админ-панель</h1><p>Пользователи и доступ к курсам</p></div>'
-    + '<button class="add-user-btn" onclick="renderAddUserForm()" title="Добавить пользователя">＋</button></div>';
+    + '<div class="hdr-btns">'
+    + '<button class="stats-btn" onclick="renderStatsScreen()" title="Статистика">📊</button>'
+    + '<button class="add-user-btn" onclick="renderAddUserForm()" title="Добавить пользователя">＋</button>'
+    + '</div></div>';
   if (!USERS.length) {
     h += '<div class="empty-state">Пользователей пока нет.</div>';
   } else {
@@ -240,6 +243,70 @@ async function performDeleteUser() {
       + '<div class="modal-warn">Попробуйте снова.</div>'
       + '<div class="modal-btns"><button class="modal-btn modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Закрыть</button></div></div>';
   }
+}
+
+// ─── Статистика ─────────────────────────────────────────────────────────
+
+function relTime(iso) {
+  var diffMs = Date.now() - new Date(iso).getTime();
+  var mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'только что';
+  if (mins < 60) return mins + ' мин. назад';
+  var hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + ' ч. назад';
+  var days = Math.floor(hours / 24);
+  return days + ' дн. назад';
+}
+
+async function renderStatsScreen() {
+  document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="renderUserList()">← Назад</div><h1>Статистика</h1></div><div class="loading">Загрузка…</div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/stats', { headers: apiHeaders() });
+    if (res.status === 403) { showFatal('🔒', 'Доступ запрещён.'); return; }
+    if (res.status === 401) { showFatal('🔒', 'Откройте панель через бота.'); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    buildStatsScreen(data);
+  } catch (e) {
+    showFatal('⚠️', 'Не удалось загрузить статистику. Проверьте соединение и попробуйте снова.');
+  }
+}
+
+function buildStatsScreen(data) {
+  var ov = data.overview;
+  var h = '<div class="hdr"><div class="back" onclick="renderUserList()">← Назад</div><h1>Статистика</h1></div>';
+
+  h += '<div class="metrics-grid">'
+    + '<div class="metric-card"><div class="metric-value">' + ov.total_users + '</div><div class="metric-label">Всего пользователей</div></div>'
+    + '<div class="metric-card"><div class="metric-value">' + ov.users_with_progress + '</div><div class="metric-label">Есть прогресс</div></div>';
+  ov.access_counts.forEach(function (c) {
+    h += '<div class="metric-card"><div class="metric-value">' + c.access_count + '</div><div class="metric-label">Доступ: ' + c.title + '</div></div>';
+  });
+  h += '</div>';
+
+  h += '<div class="section-label">Вовлечённость по курсам</div>';
+  data.course_engagement.forEach(function (c) {
+    h += '<div class="engagement-row"><div class="engagement-top"><span>' + c.title + '</span><span>' + c.watched + '/' + c.total + ' (' + c.percent + '%)</span></div>'
+      + '<div class="progress-track"><div class="progress-fill" style="width:' + c.percent + '%"></div></div></div>';
+  });
+
+  h += '<div class="section-label">Последняя активность</div>';
+  if (!data.recent_activity.length) {
+    h += '<div class="empty-state">Пока нет активности.</div>';
+  } else {
+    h += '<div class="tlist">';
+    data.recent_activity.forEach(function (a) {
+      var label = a.username ? '@' + a.username : (a.phone_number || ('ID ' + a.user_id));
+      var pct = (a.percent === null || a.percent === undefined) ? '—' : a.percent + '%';
+      h += '<div class="titem" style="cursor:default">'
+        + '<div style="flex:1"><div class="uname">' + label + '</div>'
+        + '<div class="activity-topic">' + a.day + ' — ' + a.topic + '</div>'
+        + '<div class="activity-meta">' + pct + ' · ' + relTime(a.updated_at) + '</div></div></div>';
+    });
+    h += '</div>';
+  }
+
+  document.getElementById('app').innerHTML = h;
 }
 
 function goBack() {
