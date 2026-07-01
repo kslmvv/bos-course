@@ -52,7 +52,8 @@ async function loadUsers() {
 }
 
 function renderUserList() {
-  var h = '<div class="hdr"><div class="back" onclick="goBack()">← Назад</div><h1>Админ-панель</h1><p>Пользователи и доступ к курсам</p></div>';
+  var h = '<div class="hdr hdr-row"><div><div class="back" onclick="goBack()">← Назад</div><h1>Админ-панель</h1><p>Пользователи и доступ к курсам</p></div>'
+    + '<button class="add-user-btn" onclick="renderAddUserForm()" title="Добавить пользователя">＋</button></div>';
   if (!USERS.length) {
     h += '<div class="empty-state">Пользователей пока нет.</div>';
   } else {
@@ -87,6 +88,7 @@ function renderUserDetail() {
       + '<span class="cico">' + c.icon + '</span><span class="ctitle">' + c.title + '</span></label>';
   });
   h += '</div><button class="save-btn" onclick="saveAccess()">Сохранить</button><div id="save-status"></div>';
+  h += '<button class="danger-btn" onclick="confirmDeleteUser()">Удалить пользователя</button>';
   document.getElementById('app').innerHTML = h;
 }
 
@@ -120,6 +122,113 @@ async function saveAccess() {
     setTimeout(renderUserList, 600);
   } catch (e) {
     statusEl.textContent = '❌ Ошибка сохранения. Попробуйте снова.';
+  }
+}
+
+// ─── Add user (by Telegram ID or phone) ────────────────────────────────
+
+var ADD_MODE = 'id';
+
+function renderAddUserForm() {
+  ADD_MODE = 'id';
+  var h = '<div class="hdr"><div class="back" onclick="renderUserList()">← К списку</div><h1>Добавить пользователя</h1></div>'
+    + '<div class="tabs">'
+    + '<button class="tab-btn active" id="tab-id" onclick="switchAddMode(\'id\')">По Telegram ID</button>'
+    + '<button class="tab-btn" id="tab-phone" onclick="switchAddMode(\'phone\')">По номеру телефона</button>'
+    + '</div>'
+    + '<input class="text-input" id="add-input" type="text" inputmode="numeric" placeholder="Telegram ID, например 123456789">'
+    + '<div class="section-label">Выдать доступ к курсам</div><div class="tlist">';
+  ADMIN_COURSES.forEach(function (c) {
+    h += '<label class="ccheck"><input type="checkbox" data-add-course="' + c.id + '">'
+      + '<span class="cico">' + c.icon + '</span><span class="ctitle">' + c.title + '</span></label>';
+  });
+  h += '</div><button class="save-btn" onclick="submitAddUser()">Добавить</button><div id="add-status"></div>';
+  document.getElementById('app').innerHTML = h;
+}
+
+function switchAddMode(mode) {
+  ADD_MODE = mode;
+  document.getElementById('tab-id').classList.toggle('active', mode === 'id');
+  document.getElementById('tab-phone').classList.toggle('active', mode === 'phone');
+  var input = document.getElementById('add-input');
+  input.value = '';
+  if (mode === 'id') {
+    input.type = 'text'; input.inputMode = 'numeric';
+    input.placeholder = 'Telegram ID, например 123456789';
+  } else {
+    input.type = 'tel'; input.inputMode = 'tel';
+    input.placeholder = 'Номер телефона, например +998901234567';
+  }
+}
+
+async function submitAddUser() {
+  var raw = document.getElementById('add-input').value.trim();
+  var statusEl = document.getElementById('add-status');
+  var courseIds = [];
+  document.querySelectorAll('#app input[data-add-course]').forEach(function (cb) {
+    if (cb.checked) courseIds.push(cb.getAttribute('data-add-course'));
+  });
+
+  var url, body;
+  if (ADD_MODE === 'id') {
+    var idNum = parseInt(raw, 10);
+    if (!raw || isNaN(idNum)) { statusEl.textContent = '❌ Введите корректный Telegram ID (число).'; return; }
+    url = API_BASE + '/api/admin/add-user-by-id';
+    body = { user_id: idNum, course_ids: courseIds };
+  } else {
+    if (!raw) { statusEl.textContent = '❌ Введите номер телефона.'; return; }
+    url = API_BASE + '/api/admin/add-user-by-phone';
+    body = { phone_number: raw, course_ids: courseIds };
+  }
+
+  statusEl.textContent = 'Добавление…';
+  try {
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    statusEl.textContent = '✅ Добавлено';
+    setTimeout(loadUsers, 600);
+  } catch (e) {
+    statusEl.textContent = '❌ Ошибка. Проверьте данные и попробуйте снова.';
+  }
+}
+
+// ─── Delete user (destructive — confirmation required) ─────────────────
+
+function confirmDeleteUser() {
+  var u = USERS[CURRENT_USER_IDX];
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal-box">'
+    + '<div class="modal-title">Удалить пользователя?</div>'
+    + '<div class="modal-warn">Это необратимо удалит ' + userLabel(u) + ', весь его доступ к курсам и всю статистику просмотров. Отменить это действие нельзя.</div>'
+    + '<div class="modal-btns">'
+    + '<button class="modal-btn modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Отмена</button>'
+    + '<button class="modal-btn modal-confirm" onclick="performDeleteUser()">Да, удалить</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+}
+
+async function performDeleteUser() {
+  var overlay = document.querySelector('.modal-overlay');
+  var u = USERS[CURRENT_USER_IDX];
+  if (overlay) overlay.innerHTML = '<div class="modal-box"><div class="modal-title">Удаление…</div></div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/delete-user', {
+      method: 'POST',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ user_id: u.user_id })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (overlay) overlay.remove();
+    await loadUsers();
+  } catch (e) {
+    if (overlay) overlay.innerHTML = '<div class="modal-box"><div class="modal-title">Ошибка удаления</div>'
+      + '<div class="modal-warn">Попробуйте снова.</div>'
+      + '<div class="modal-btns"><button class="modal-btn modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Закрыть</button></div></div>';
   }
 }
 
