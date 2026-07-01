@@ -12,7 +12,8 @@ var INIT_DATA = tg ? tg.initData : '';
 // /api/courses list endpoint yet, so this is kept in sync by hand until a
 // future Этап adds one.
 var ADMIN_COURSES = [
-  { id: 'bos', title: 'БОС Курс', icon: '📚' }
+  { id: 'bos', title: 'БОС Курс', icon: '📚' },
+  { id: 'roadmap', title: 'Дорожная карта: 12 шагов (live)', icon: 'roadmap_icon.png' }
 ];
 
 var USERS = [];
@@ -23,6 +24,15 @@ function apiHeaders(extra) {
   var h = extra ? Object.assign({}, extra) : {};
   h['Authorization'] = 'tma ' + INIT_DATA;
   return h;
+}
+
+// Same icon-path-vs-emoji pattern as main.js's buildMyCourses.
+function isImageIcon(icon) {
+  return typeof icon === 'string' && /\.(png|jpe?g|svg|gif|webp)$/i.test(icon);
+}
+function courseIconHtml(icon) {
+  if (isImageIcon(icon)) return '<img src="' + icon + '" alt="">';
+  return icon || '📚';
 }
 
 function showFatal(icon, text) {
@@ -85,7 +95,7 @@ function renderUserDetail() {
   ADMIN_COURSES.forEach(function (c) {
     var checked = INITIAL_ACCESS[c.id] ? ' checked' : '';
     h += '<label class="ccheck"><input type="checkbox" data-course="' + c.id + '"' + checked + '>'
-      + '<span class="cico">' + c.icon + '</span><span class="ctitle">' + c.title + '</span></label>';
+      + '<span class="cico">' + courseIconHtml(c.icon) + '</span><span class="ctitle">' + c.title + '</span></label>';
   });
   h += '</div><button class="save-btn" onclick="saveAccess()">Сохранить</button><div id="save-status"></div>';
   h += '<button class="danger-btn" onclick="confirmDeleteUser()">Удалить пользователя</button>';
@@ -140,7 +150,7 @@ function renderAddUserForm() {
     + '<div class="section-label">Выдать доступ к курсам</div><div class="tlist">';
   ADMIN_COURSES.forEach(function (c) {
     h += '<label class="ccheck"><input type="checkbox" data-add-course="' + c.id + '">'
-      + '<span class="cico">' + c.icon + '</span><span class="ctitle">' + c.title + '</span></label>';
+      + '<span class="cico">' + courseIconHtml(c.icon) + '</span><span class="ctitle">' + c.title + '</span></label>';
   });
   h += '</div><button class="save-btn" onclick="submitAddUser()">Добавить</button><div id="add-status"></div>';
   document.getElementById('app').innerHTML = h;

@@ -13,6 +13,8 @@ var URL_PARAMS = new URLSearchParams(location.search);
 var URL_TOKEN = URL_PARAMS.get('token');
 var URL_DAY = URL_PARAMS.get('day');
 var URL_TOPIC = URL_PARAMS.get('topic');
+// Defaults to "bos" so links generated before this param existed still work.
+var URL_COURSE_ID = URL_PARAMS.get('course_id') || 'bos';
 
 var SAVE_KEY = 'bos_progress';
 var SPEED_KEY = 'bos_speed';
@@ -108,7 +110,7 @@ function saveProgress() {
     localStorage.setItem(progressKey(), JSON.stringify({
       badgeText: G.badgeText, idx: G.idx, pos: pos,
       title: G.topics[G.idx] ? G.topics[G.idx].title : '',
-      type: G.badgeText === 'ДОРОЖНАЯ КАРТА' ? 'roadmap' : (G.badgeText.indexOf('ДЕНЬ') >= 0 ? 'day' : 'other'),
+      type: G.badgeText.indexOf('ДЕНЬ') >= 0 ? 'day' : 'other',
       dayId: G.badgeText.indexOf('ДЕНЬ') >= 0 ? parseInt(G.badgeText.replace('ДЕНЬ ', '')) : null
     }));
   } catch (e) {}
@@ -706,22 +708,12 @@ function buildHome() {
       + '<div class="continue-title">' + prog.badgeText + ' — Тема ' + (prog.idx + 1) + posStr + '<br><span style="font-size:13px;font-weight:400;color:var(--tx2)">' + prog.title + '</span></div>'
       + '<div class="continue-btns"><button class="cbtn-cont" onclick="continueWatch(event)">Продолжить</button>'
       + '<button class="cbtn-new" onclick="startNew(event)">С начала</button></div></div>';
-  } else if (prog && prog.type === 'roadmap') {
-    var rmPosStr = prog.pos > 0 ? ' (' + fmt(prog.pos) + ')' : '';
-    h += '<div class="continue-card"><div class="continue-label">▶ Продолжить просмотр</div>'
-      + '<div class="continue-title">ДОРОЖНАЯ КАРТА — Тема ' + (prog.idx + 1) + rmPosStr + '<br><span style="font-size:13px;font-weight:400;color:var(--tx2)">' + prog.title + '</span></div>'
-      + '<div class="continue-btns"><button class="cbtn-cont" onclick="continueRoadmap(event)">Продолжить</button>'
-      + '<button class="cbtn-new" onclick="startNew(event)">С начала</button></div></div>';
   }
   h += '<div class="stitle">Программа курса</div><div class="grid">';
   COURSE_DATA.days.forEach(function (d) {
     h += '<div class="dcard" onclick="openDay(' + d.id + ')"><div class="n">' + d.id + '</div><div class="l">' + d.title + '</div><div class="c">' + d.topics.length + ' тем</div></div>';
   });
   h += '</div>';
-  if (COURSE_DATA.roadmap) {
-    h += '<div class="stitle">Дорожная карта</div>';
-    h += '<div class="bcard" onclick="openRoadmap()"><div class="bico">🗺</div><div class="binfo"><h3>' + COURSE_DATA.roadmap.title + '</h3><p>' + COURSE_DATA.roadmap.topics.length + ' тем · 12 шагов системного бизнеса</p></div><div class="barrow">▶</div></div>';
-  }
   document.getElementById('s-home').innerHTML = h;
 }
 
@@ -731,12 +723,6 @@ function continueWatch(e) {
   if (!day) return;
   var sp = prog.pos || day.topics[prog.idx].startSeconds || 0;
   openPlayer(day.topics, prog.idx, 'ДЕНЬ ' + prog.dayId, function () { openDay(prog.dayId); }, sp, day.videoHlsUrl);
-}
-function continueRoadmap(e) {
-  e.stopPropagation(); var prog = loadProgress(); if (!prog || prog.type !== 'roadmap') return;
-  var rm = COURSE_DATA.roadmap; if (!rm) return;
-  var sp = prog.pos || rm.topics[prog.idx].startSeconds || 0;
-  openPlayer(rm.topics, prog.idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, sp, rm.videoId);
 }
 function startNew(e) { e.stopPropagation(); clearProgress(); buildHome(); }
 
@@ -761,24 +747,6 @@ function openDayVideo(dayId, idx) {
   if (!day) return;
   var startPos = day.topics[idx].startSeconds || 0;
   openPlayer(day.topics, idx, 'ДЕНЬ ' + dayId, function () { openDay(dayId); }, startPos, day.videoHlsUrl);
-}
-function openRoadmap() {
-  var rm = COURSE_DATA.roadmap;
-  var h = '<div class="back" onclick="goHome()">← Назад</div>'
-    + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">Дорожная карта</div>'
-    + '<div style="color:var(--tx2);font-size:13px;margin-top:4px">' + rm.title + '</div></div><div class="tlist">';
-  rm.topics.forEach(function (tp, i) {
-    h += '<div class="titem" onclick="openRoadmapVideo(' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + '</div></div>';
-  });
-  document.getElementById('s-days').innerHTML = h + '</div>';
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
-  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
-  document.getElementById('s-days').classList.add('on'); document.getElementById('n-home').classList.add('on');
-}
-function openRoadmapVideo(idx) {
-  var rm = COURSE_DATA.roadmap;
-  var startPos = rm.topics[idx].startSeconds || 0;
-  openPlayer(rm.topics, idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, startPos, rm.videoId);
 }
 function goHome() {
   stopVideo();
@@ -817,7 +785,6 @@ function currentSectionKey() {
   if (m) return 'day-' + m[1];
   m = /^БОНУС (\d+)$/.exec(G.badgeText);
   if (m) return 'bonus-' + (parseInt(m[1], 10) - 1);
-  if (G.badgeText === 'ДОРОЖНАЯ КАРТА') return 'roadmap';
   if (COURSE_DATA && COURSE_DATA.tools) {
     for (var i = 0; i < COURSE_DATA.tools.length; i++) {
       if (COURSE_DATA.tools[i].title.toUpperCase() === G.badgeText) return 'tool-' + i;
@@ -850,12 +817,6 @@ function openFromParams(sectionKey, topicIdx) {
     openPlayer(t.topics, idx, t.title.toUpperCase(), function () { goTab('tools'); });
     return true;
   }
-  if (sectionKey === 'roadmap') {
-    var rm = COURSE_DATA.roadmap;
-    if (!rm || !rm.topics[idx]) return false;
-    openPlayer(rm.topics, idx, 'ДОРОЖНАЯ КАРТА', openRoadmap, rm.topics[idx].startSeconds || 0, rm.videoId);
-    return true;
-  }
   return false;
 }
 
@@ -869,7 +830,8 @@ async function openInBrowser() {
     });
     if (!res.ok) return;
     var data = await res.json();
-    var url = location.origin + location.pathname + '?token=' + encodeURIComponent(data.token) + '&topic=' + G.idx;
+    var url = location.origin + location.pathname + '?token=' + encodeURIComponent(data.token) + '&topic=' + G.idx
+      + '&course_id=' + encodeURIComponent(CURRENT_COURSE_ID);
     if (section) url += '&day=' + encodeURIComponent(section);
     if (tg && tg.openLink) tg.openLink(url, { try_instant_view: false });
     else window.open(url, '_blank');
@@ -885,6 +847,18 @@ function setNavVisible(visible) {
   nav.classList.toggle('hidden', !visible);
 }
 
+// Course icons are either an emoji/text glyph or a relative path to an
+// image file shipped alongside index.html — this is the shared pattern for
+// telling them apart, used by every course card renderer (see also
+// admin.js's own copy for the checkbox list).
+function isImageIcon(icon) {
+  return typeof icon === 'string' && /\.(png|jpe?g|svg|gif|webp)$/i.test(icon);
+}
+function courseIconHtml(icon) {
+  if (isImageIcon(icon)) return '<img src="' + icon + '" alt="">';
+  return icon || '📚';
+}
+
 function buildMyCourses(courses, isAdmin) {
   var h = '<div class="mc-hdr"><div><h1>Мои курсы</h1><p>BilimBook</p></div>';
   if (isAdmin) h += '<button class="admin-btn" onclick="goAdmin()" title="Админ-панель">⚙️</button>';
@@ -894,7 +868,7 @@ function buildMyCourses(courses, isAdmin) {
   } else {
     courses.forEach(function (c) {
       h += '<div class="course-card" onclick="selectCourse(\'' + c.id + '\')">'
-        + '<div class="course-ico">' + (c.icon || '📚') + '</div>'
+        + '<div class="course-ico">' + courseIconHtml(c.icon) + '</div>'
         + '<div class="course-info"><h3>' + c.title + '</h3>' + (c.subtitle ? '<p>' + c.subtitle + '</p>' : '') + '</div>'
         + '<div class="course-arrow">▶</div></div>';
     });
@@ -927,9 +901,43 @@ async function initMyCoursesScreen() {
   buildMyCourses(MY_COURSES, isAdmin);
 }
 
+// A course whose content is a single video with timecoded topics (no
+// days/bonuses/tools) — e.g. "roadmap". Detected structurally so any future
+// course of this shape gets the same single-topics-list treatment for free.
+function isSingleVideoCourse(data) {
+  return !!(data && Array.isArray(data.topics) && data.videoId);
+}
+
+function openSingleVideoCourse() {
+  var d = COURSE_DATA;
+  var prog = loadProgress();
+  var savedIdx = prog ? prog.idx : -1;
+  var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
+    + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + d.title + '</div></div><div class="tlist">';
+  d.topics.forEach(function (tp, i) {
+    var cls = i === savedIdx ? ' current' : '';
+    h += '<div class="titem' + cls + '" onclick="openSingleVideoTopic(' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + (i === savedIdx ? ' ▶' : '') + '</div></div>';
+  });
+  document.getElementById('s-days').innerHTML = h + '</div>';
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  document.getElementById('s-days').classList.add('on');
+  setNavVisible(false);
+}
+
+function openSingleVideoTopic(idx) {
+  var d = COURSE_DATA;
+  var startPos = d.topics[idx].startSeconds || 0;
+  openPlayer(d.topics, idx, d.title.toUpperCase(), openSingleVideoCourse, startPos, d.videoId);
+}
+
 async function selectCourse(courseId) {
   CURRENT_COURSE_ID = courseId;
   if (!(await loadCourseData(courseId))) return;
+  if (isSingleVideoCourse(COURSE_DATA)) {
+    openSingleVideoCourse();
+    return;
+  }
   buildHome(); buildBonus(); buildTools();
   document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-home').classList.add('on');
@@ -962,15 +970,20 @@ async function init() {
   if (URL_TOKEN) {
     // "Открыть в браузере" deep link: skip the course picker and go
     // straight into the course/topic it was generated for.
-    CURRENT_COURSE_ID = 'bos';
+    CURRENT_COURSE_ID = URL_COURSE_ID;
     if (!(await loadCourseData(CURRENT_COURSE_ID))) return;
-    buildHome(); buildBonus(); buildTools();
-    document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
-    document.getElementById('s-home').classList.add('on');
-    setNavVisible(true);
     var ob = document.getElementById('obb');
     if (ob) ob.style.display = 'none';
-    openFromParams(URL_DAY, URL_TOPIC);
+    if (isSingleVideoCourse(COURSE_DATA)) {
+      openSingleVideoCourse();
+      if (URL_TOPIC !== null) openSingleVideoTopic(parseInt(URL_TOPIC, 10) || 0);
+    } else {
+      buildHome(); buildBonus(); buildTools();
+      document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+      document.getElementById('s-home').classList.add('on');
+      setNavVisible(true);
+      openFromParams(URL_DAY, URL_TOPIC);
+    }
     return;
   }
 
