@@ -4,6 +4,12 @@
 
 var API_BASE = 'https://bos-bot-production.up.railway.app';
 
+// Bumped on every deploy alongside this file's own ?v= in admin.html —
+// reused to cache-bust goBack()'s in-app navigation to index.html. Keep
+// this in sync by hand with main.js's own FRONTEND_VERSION and both
+// <script>?v= tags.
+var FRONTEND_VERSION = 'etap2-02';
+
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
 
@@ -541,7 +547,9 @@ async function submitPublish() {
 }
 
 function goBack() {
-  location.href = 'index.html' + location.hash;
+  // See FRONTEND_VERSION's comment above — cache-busts the HTML document
+  // itself, not just the .js it loads.
+  location.href = 'index.html?v=' + FRONTEND_VERSION + location.hash;
 }
 
 function init() {

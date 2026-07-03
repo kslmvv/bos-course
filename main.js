@@ -2,6 +2,12 @@
 // Update this to your deployed bot's public URL (Railway domain).
 var API_BASE = 'https://bos-bot-production.up.railway.app';
 
+// Bumped on every deploy alongside the ?v= on this file's own <script> tag
+// in index.html/admin.html — reused to cache-bust in-app HTML navigation
+// (goAdmin/goBack), which a plain filename query on the <script> tag alone
+// doesn't cover. Keep the three in sync by hand.
+var FRONTEND_VERSION = 'etap2-02';
+
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
 var IS_IOS = /iPhone|iPad/.test(navigator.userAgent);
@@ -970,7 +976,11 @@ function backToMyCourses() {
 }
 
 function goAdmin() {
-  location.href = 'admin.html' + location.hash;
+  // Cache-bust the HTML document itself, not just the .js it loads — GitHub
+  // Pages sends Cache-Control: max-age=600 on .html too, and same-tab
+  // in-app navigation (unlike a hard reload) can serve that straight from
+  // the browser/WebView cache without ever re-checking the network.
+  location.href = 'admin.html?v=' + FRONTEND_VERSION + location.hash;
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────
