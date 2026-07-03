@@ -4,11 +4,15 @@
 
 var API_BASE = 'https://bos-bot-production.up.railway.app';
 
+// Must match the deployed bot's @username — used to deep-link into an
+// "edit via chat" session (see openEditViaChat / bot.py's start() handler).
+var BOT_USERNAME = 'BilimBook_bot';
+
 // Bumped on every deploy alongside this file's own ?v= in admin.html —
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-02';
+var FRONTEND_VERSION = 'etap2-03';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -361,11 +365,20 @@ function buildDraftsScreen() {
         + (clickable ? ' onclick="openDraftEditor(' + d.id + ')"' : '') + '>'
         + '<div style="flex:1"><div class="uname">' + (d.video_title || 'Без названия') + '</div>'
         + '<div class="umeta">' + label + ' · ' + d.topic_count + ' тем</div></div>'
+        + (clickable ? '<button class="topic-del-btn" style="color:var(--acc)" onclick="event.stopPropagation(); openEditViaChat(' + d.id + ')" title="Редактировать через чат бота">✏️</button>' : '')
         + (clickable ? '<div class="barrow">▶</div>' : '') + '</div>';
     });
     h += '</div>';
   }
   document.getElementById('app').innerHTML = h;
+}
+
+// Standard Telegram deep-link pattern: opens the bot's chat with a
+// "/start edit_<id>" that bot.py's start() handler picks up to begin an
+// edit-via-chat session for this lesson — an alternative to the WebApp
+// topic editor for admins who'd rather describe changes in plain Russian.
+function openEditViaChat(id) {
+  if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/' + BOT_USERNAME + '?start=edit_' + id);
 }
 
 async function openDraftEditor(id) {
