@@ -65,6 +65,7 @@ function renderUserList() {
   var h = '<div class="hdr hdr-row"><div><div class="back" onclick="goBack()">← Назад</div><h1>Админ-панель</h1><p>Пользователи и доступ к курсам</p></div>'
     + '<div class="hdr-btns">'
     + '<button class="stats-btn" onclick="renderStatsScreen()" title="Статистика">📊</button>'
+    + '<button class="stats-btn" onclick="renderDraftsScreen()" title="Черновики уроков">📄</button>'
     + '<button class="add-user-btn" onclick="renderAddUserForm()" title="Добавить пользователя">＋</button>'
     + '</div></div>';
   if (!USERS.length) {
@@ -307,6 +308,236 @@ function buildStatsScreen(data) {
   }
 
   document.getElementById('app').innerHTML = h;
+}
+
+// ─── Черновики уроков (Этап 2: review + publish) ────────────────────────
+
+var PENDING_LESSON_STATUS_LABELS = {
+  processing: 'Обрабатывается',
+  transcribing: 'Транскрибируется',
+  grouping: 'Группировка тем',
+  ready_for_review: 'Ждёт проверки',
+  published: 'Опубликовано',
+  failed: 'Ошибка'
+};
+
+var DRAFTS = [];
+var CURRENT_LESSON = null;   // full detail of the draft being edited
+var DRAFT_TOPICS = [];       // editable working copy: [{title, start_seconds}]
+var ADMIN_COURSES_LIST = []; // fetched lazily for the publish screen
+var PUBLISH_MODE = 'new_course';
+var PUBLISH_SELECTED_COURSE = null;
+
+async function renderDraftsScreen() {
+  document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="renderUserList()">← Назад</div><h1>Черновики уроков</h1></div><div class="loading">Загрузка…</div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons', { headers: apiHeaders() });
+    if (res.status === 403) { showFatal('🔒', 'Доступ запрещён.'); return; }
+    if (res.status === 401) { showFatal('🔒', 'Откройте панель через бота.'); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DRAFTS = await res.json();
+    buildDraftsScreen();
+  } catch (e) {
+    showFatal('⚠️', 'Не удалось загрузить черновики. Проверьте соединение и попробуйте снова.');
+  }
+}
+
+function buildDraftsScreen() {
+  var h = '<div class="hdr"><div class="back" onclick="renderUserList()">← Назад</div><h1>Черновики уроков</h1><p>Видео, присланные боту на обработку</p></div>';
+  if (!DRAFTS.length) {
+    h += '<div class="empty-state">Черновиков пока нет. Пришлите ссылку на YouTube-видео боту от имени администратора.</div>';
+  } else {
+    h += '<div class="tlist">';
+    DRAFTS.forEach(function (d, i) {
+      var clickable = d.status === 'ready_for_review';
+      var label = PENDING_LESSON_STATUS_LABELS[d.status] || d.status;
+      h += '<div class="titem" style="' + (clickable ? 'cursor:pointer' : 'cursor:default') + '"'
+        + (clickable ? ' onclick="openDraftEditor(' + d.id + ')"' : '') + '>'
+        + '<div style="flex:1"><div class="uname">' + (d.video_title || 'Без названия') + '</div>'
+        + '<div class="umeta">' + label + ' · ' + d.topic_count + ' тем</div></div>'
+        + (clickable ? '<div class="barrow">▶</div>' : '') + '</div>';
+    });
+    h += '</div>';
+  }
+  document.getElementById('app').innerHTML = h;
+}
+
+async function openDraftEditor(id) {
+  document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="buildDraftsScreen()">← Назад</div><h1>Загрузка…</h1></div><div class="loading">Загрузка…</div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons/' + id, { headers: apiHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    CURRENT_LESSON = await res.json();
+    DRAFT_TOPICS = CURRENT_LESSON.topics.map(function (t) { return { title: t.title, start_seconds: t.start_seconds }; });
+    renderTopicEditor();
+  } catch (e) {
+    showFatal('⚠️', 'Не удалось загрузить урок. Проверьте соединение и попробуйте снова.');
+  }
+}
+
+function formatTimecode(seconds) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  var m = Math.floor(seconds / 60), s = seconds % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+// Accepts "m:ss" (any number of minutes, e.g. "238:43" for a 3h58m video).
+// Returns null if the string doesn't parse as a valid timecode.
+function parseTimecode(str) {
+  var m = /^(\d+):([0-5]?\d)$/.exec(String(str).trim());
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+function renderTopicEditor() {
+  var h = '<div class="hdr"><div class="back" onclick="buildDraftsScreen()">← К черновикам</div><h1>' + (CURRENT_LESSON.video_title || 'Без названия') + '</h1><p>Проверьте и отредактируйте темы перед публикацией</p></div>';
+  h += '<div id="topic-rows">';
+  DRAFT_TOPICS.forEach(function (t, i) {
+    h += '<div class="topic-row">'
+      + '<input class="text-input topic-time-input" data-idx="' + i + '" data-field="time" value="' + formatTimecode(t.start_seconds) + '" placeholder="0:00">'
+      + '<input class="text-input topic-title-input" data-idx="' + i + '" data-field="title" value="' + t.title.replace(/"/g, '&quot;') + '" placeholder="Название темы">'
+      + '<button class="topic-del-btn" onclick="removeTopicRow(' + i + ')" title="Удалить">✕</button>'
+      + '</div>';
+  });
+  h += '</div>';
+  h += '<button class="tab-btn" style="width:100%;margin-bottom:14px" onclick="addTopicRow()">＋ Добавить тему</button>';
+  h += '<button class="save-btn" onclick="publishStep1SaveTopics()">Опубликовать</button><div id="editor-status"></div>';
+  document.getElementById('app').innerHTML = h;
+}
+
+// Reads whatever's currently in the input fields back into DRAFT_TOPICS,
+// so edits survive add/remove (which re-render the whole list) and the
+// final PATCH before moving to the publish screen. Returns the list of
+// (1-based) row numbers whose timecode didn't parse, so the caller can
+// warn instead of silently keeping the previous value.
+function syncTopicsFromInputs() {
+  var badRows = [];
+  document.querySelectorAll('#topic-rows .topic-time-input').forEach(function (input) {
+    var i = parseInt(input.getAttribute('data-idx'), 10);
+    var secs = parseTimecode(input.value);
+    if (secs !== null) DRAFT_TOPICS[i].start_seconds = secs;
+    else badRows.push(i + 1);
+  });
+  document.querySelectorAll('#topic-rows .topic-title-input').forEach(function (input) {
+    var i = parseInt(input.getAttribute('data-idx'), 10);
+    DRAFT_TOPICS[i].title = input.value;
+  });
+  return badRows;
+}
+
+function addTopicRow() {
+  syncTopicsFromInputs();
+  DRAFT_TOPICS.push({ title: '', start_seconds: 0 });
+  renderTopicEditor();
+}
+
+function removeTopicRow(i) {
+  syncTopicsFromInputs();
+  DRAFT_TOPICS.splice(i, 1);
+  renderTopicEditor();
+}
+
+async function publishStep1SaveTopics() {
+  var statusEl = document.getElementById('editor-status');
+  var badRows = syncTopicsFromInputs();
+  if (badRows.length) { statusEl.textContent = '❌ Некорректный тайм-код в теме ' + badRows.join(', ') + ' (формат мм:сс).'; return; }
+
+  if (!DRAFT_TOPICS.length) { statusEl.textContent = '❌ Должна остаться хотя бы одна тема.'; return; }
+  for (var i = 0; i < DRAFT_TOPICS.length; i++) {
+    if (!DRAFT_TOPICS[i].title.trim()) { statusEl.textContent = '❌ У темы ' + (i + 1) + ' пустое название.'; return; }
+  }
+
+  statusEl.textContent = 'Сохранение…';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons/' + CURRENT_LESSON.id + '/topics', {
+      method: 'PATCH',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(DRAFT_TOPICS.map(function (t) { return { title: t.title.trim(), start_seconds: t.start_seconds }; }))
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    renderPublishScreen();
+  } catch (e) {
+    statusEl.textContent = '❌ Ошибка сохранения. Попробуйте снова.';
+  }
+}
+
+async function renderPublishScreen() {
+  PUBLISH_MODE = 'new_course';
+  PUBLISH_SELECTED_COURSE = null;
+  document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="renderTopicEditor()">← Назад</div><h1>Публикация</h1></div><div class="loading">Загрузка списка курсов…</div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/courses', { headers: apiHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    ADMIN_COURSES_LIST = await res.json();
+    buildPublishScreen();
+  } catch (e) {
+    showFatal('⚠️', 'Не удалось загрузить список курсов. Проверьте соединение и попробуйте снова.');
+  }
+}
+
+function buildPublishScreen() {
+  var h = '<div class="hdr"><div class="back" onclick="renderTopicEditor()">← Назад</div><h1>Публикация</h1><p>' + (CURRENT_LESSON.video_title || '') + '</p></div>';
+  h += '<div class="tabs">'
+    + '<button class="tab-btn' + (PUBLISH_MODE === 'new_course' ? ' active' : '') + '" onclick="switchPublishMode(\'new_course\')">Новый курс</button>'
+    + '<button class="tab-btn' + (PUBLISH_MODE === 'existing_course' ? ' active' : '') + '" onclick="switchPublishMode(\'existing_course\')">В существующий</button>'
+    + '</div>';
+
+  if (PUBLISH_MODE === 'new_course') {
+    h += '<input class="text-input" id="pub-title" type="text" placeholder="Название курса">'
+      + '<input class="text-input" id="pub-subtitle" type="text" placeholder="Описание (необязательно)">';
+  } else {
+    h += '<div class="section-label">Курс</div><div class="tlist">';
+    if (!ADMIN_COURSES_LIST.length) {
+      h += '<div class="empty-state">Нет курсов, куда можно добавить урок.</div>';
+    } else {
+      ADMIN_COURSES_LIST.forEach(function (c) {
+        var checked = PUBLISH_SELECTED_COURSE === c.id ? ' checked' : '';
+        h += '<label class="ccheck"><input type="radio" name="pub-course" value="' + c.id + '"' + checked + ' onclick="PUBLISH_SELECTED_COURSE=\'' + c.id + '\'">'
+          + '<span class="cico">' + courseIconHtml(c.icon) + '</span><span class="ctitle">' + c.title + '</span></label>';
+      });
+    }
+    h += '</div><input class="text-input" id="pub-day-title" type="text" placeholder="Название раздела, например «День 7»" style="margin-top:14px">';
+  }
+
+  h += '<button class="save-btn" onclick="submitPublish()">Подтвердить и опубликовать</button><div id="publish-status"></div>';
+  document.getElementById('app').innerHTML = h;
+}
+
+function switchPublishMode(mode) {
+  PUBLISH_MODE = mode;
+  buildPublishScreen();
+}
+
+async function submitPublish() {
+  var statusEl;
+  var body;
+
+  if (PUBLISH_MODE === 'new_course') {
+    var title = document.getElementById('pub-title').value.trim();
+    var subtitle = document.getElementById('pub-subtitle').value.trim();
+    if (!title) { document.getElementById('publish-status').textContent = '❌ Введите название курса.'; return; }
+    body = { mode: 'new_course', title: title, subtitle: subtitle || undefined };
+  } else {
+    if (!PUBLISH_SELECTED_COURSE) { document.getElementById('publish-status').textContent = '❌ Выберите курс.'; return; }
+    var dayTitle = document.getElementById('pub-day-title').value.trim();
+    if (!dayTitle) { document.getElementById('publish-status').textContent = '❌ Введите название раздела.'; return; }
+    body = { mode: 'existing_course', course_id: PUBLISH_SELECTED_COURSE, day_title: dayTitle };
+  }
+
+  statusEl = document.getElementById('publish-status');
+  statusEl.textContent = 'Публикация…';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons/' + CURRENT_LESSON.id + '/publish', {
+      method: 'POST',
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    statusEl.textContent = '✅ Опубликовано';
+    setTimeout(renderDraftsScreen, 700);
+  } catch (e) {
+    statusEl.textContent = '❌ Ошибка публикации. Проверьте данные и попробуйте снова.';
+  }
 }
 
 function goBack() {

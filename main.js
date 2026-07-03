@@ -756,7 +756,10 @@ function goHome() {
 }
 function buildBonus() {
   var h = '<div class="hdr"><h1>Бонусы</h1><p>Дополнительные материалы</p></div>';
-  COURSE_DATA.bonuses.forEach(function (b, i) {
+  // Pure-DB courses (Этап 2) have no bonuses/tools — see syncSectionNav(),
+  // which hides these tabs entirely for such courses; this fallback just
+  // keeps things from crashing if this ever renders anyway.
+  (COURSE_DATA.bonuses || []).forEach(function (b, i) {
     h += '<div class="bcard" onclick="openBonus(' + i + ')"><div class="bico">' + b.icon + '</div><div class="binfo"><h3>' + b.title + '</h3><p>' + b.desc + '</p></div><div class="barrow">▶</div></div>';
   });
   document.getElementById('s-bonus').innerHTML = h;
@@ -764,10 +767,20 @@ function buildBonus() {
 function openBonus(i) { var b = COURSE_DATA.bonuses[i]; openPlayer(b.topics, 0, 'БОНУС ' + (i + 1), function () { goTab('bonus'); }); }
 function buildTools() {
   var h = '<div class="hdr"><h1>Инструменты</h1><p>Менеджмент практикум</p></div>';
-  COURSE_DATA.tools.forEach(function (t, i) {
+  (COURSE_DATA.tools || []).forEach(function (t, i) {
     h += '<div class="bcard" onclick="openTool(' + i + ')"><div class="bico">' + t.icon + '</div><div class="binfo"><h3>' + t.title + '</h3><p>' + t.desc + '</p></div><div class="barrow">▶</div></div>';
   });
   document.getElementById('s-tools').innerHTML = h;
+}
+
+// Pure-DB multi-day courses (Этап 2) ship with no bonuses/tools at all —
+// hide those nav tabs rather than show an empty screen. Must re-run on
+// every course switch since the nav DOM persists across them.
+function syncSectionNav() {
+  var hasBonus = !!(COURSE_DATA.bonuses && COURSE_DATA.bonuses.length);
+  var hasTools = !!(COURSE_DATA.tools && COURSE_DATA.tools.length);
+  var nb = document.getElementById('n-bonus'); if (nb) nb.style.display = hasBonus ? '' : 'none';
+  var nt = document.getElementById('n-tools'); if (nt) nt.style.display = hasTools ? '' : 'none';
 }
 function openTool(i) {
   var t = COURSE_DATA.tools[i];
@@ -938,7 +951,7 @@ async function selectCourse(courseId) {
     openSingleVideoCourse();
     return;
   }
-  buildHome(); buildBonus(); buildTools();
+  buildHome(); buildBonus(); buildTools(); syncSectionNav();
   document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-home').classList.add('on');
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
@@ -978,7 +991,7 @@ async function init() {
       openSingleVideoCourse();
       if (URL_TOPIC !== null) openSingleVideoTopic(parseInt(URL_TOPIC, 10) || 0);
     } else {
-      buildHome(); buildBonus(); buildTools();
+      buildHome(); buildBonus(); buildTools(); syncSectionNav();
       document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
       document.getElementById('s-home').classList.add('on');
       setNavVisible(true);
