@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-05';
+var FRONTEND_VERSION = 'etap2-06';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -496,8 +496,39 @@ function renderTopicEditor() {
   });
   h += '</div>';
   h += '<button class="tab-btn" style="width:100%;margin-bottom:14px" onclick="addTopicRow()">＋ Добавить тему</button>';
+  h += '<button class="tab-btn" style="width:100%;margin-bottom:14px" onclick="downloadDraftTranscript()">📄 Скачать транскрипт</button>';
   h += '<button class="save-btn" onclick="publishStep1SaveTopics()">Опубликовать</button><div id="editor-status"></div>';
   document.getElementById('app').innerHTML = h;
+}
+
+// A plain <a href> can't carry the Authorization header the API requires,
+// so this fetches the file itself and downloads the response body via a
+// throwaway blob: URL instead.
+async function downloadDraftTranscript() {
+  var statusEl = document.getElementById('editor-status');
+  statusEl.textContent = 'Загрузка транскрипта…';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons/' + CURRENT_LESSON.id + '/transcript', {
+      headers: apiHeaders()
+    });
+    if (res.status === 404) {
+      statusEl.textContent = '❌ Транскрипт недоступен для этого черновика (создан до появления этой функции).';
+      return;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'transcript_' + CURRENT_LESSON.id + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.textContent = '❌ Не удалось скачать транскрипт. Попробуйте снова.';
+  }
 }
 
 // Reads whatever's currently in the input fields back into DRAFT_TOPICS,
