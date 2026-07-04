@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-03';
+var FRONTEND_VERSION = 'etap2-04';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -36,9 +36,12 @@ function apiHeaders(extra) {
   return h;
 }
 
-// Same icon-path-vs-emoji pattern as main.js's buildMyCourses.
+// Same icon-path-vs-emoji pattern as main.js's buildMyCourses. An icon is
+// either a relative image path (GitHub Pages-hosted file), a base64
+// data:image/... URL (see onPublishIconSelected — uploaded at publish time,
+// stored as-is in courses.icon), or an emoji/text glyph.
 function isImageIcon(icon) {
-  return typeof icon === 'string' && /\.(png|jpe?g|svg|gif|webp)$/i.test(icon);
+  return typeof icon === 'string' && (/\.(png|jpe?g|svg|gif|webp)$/i.test(icon) || /^data:image\//i.test(icon));
 }
 function courseIconHtml(icon) {
   if (isImageIcon(icon)) return '<img src="' + icon + '" alt="">';
@@ -337,6 +340,40 @@ var DRAFT_TOPICS = [];       // editable working copy: [{title, start_seconds}]
 var ADMIN_COURSES_LIST = []; // fetched lazily for the publish screen
 var PUBLISH_MODE = 'new_course';
 var PUBLISH_SELECTED_COURSE = null;
+var PUBLISH_ICON_DATA_URL = null; // base64 data URL of the icon picked for a new course, or null
+
+// Rough client-side guard so an obviously-too-big file doesn't even get read/
+// sent — backend re-validates the decoded size for real (see
+// handle_admin_publish_pending_lesson's ICON_DATA_URL_MAX_DECODED_BYTES).
+// Base64 inflates size by ~4/3, so this leaves headroom under that 500KB cap.
+var ICON_FILE_MAX_BYTES = 400 * 1024;
+
+function onPublishIconSelected(input) {
+  var file = input.files && input.files[0];
+  var statusEl = document.getElementById('publish-status');
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    statusEl.textContent = '❌ Выберите файл изображения.';
+    input.value = '';
+    return;
+  }
+  if (file.size > ICON_FILE_MAX_BYTES) {
+    statusEl.textContent = '❌ Файл слишком большой (макс. ~' + Math.round(ICON_FILE_MAX_BYTES / 1024) + ' КБ).';
+    input.value = '';
+    return;
+  }
+  statusEl.textContent = '';
+  var reader = new FileReader();
+  reader.onload = function () {
+    PUBLISH_ICON_DATA_URL = reader.result;
+    var preview = document.getElementById('icon-preview');
+    if (preview) preview.innerHTML = '<img src="' + PUBLISH_ICON_DATA_URL + '" alt="">';
+  };
+  reader.onerror = function () {
+    statusEl.textContent = '❌ Не удалось прочитать файл.';
+  };
+  reader.readAsDataURL(file);
+}
 
 async function renderDraftsScreen() {
   document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="renderUserList()">← Назад</div><h1>Черновики уроков</h1></div><div class="loading">Загрузка…</div>';
@@ -483,6 +520,7 @@ async function publishStep1SaveTopics() {
 async function renderPublishScreen() {
   PUBLISH_MODE = 'new_course';
   PUBLISH_SELECTED_COURSE = null;
+  PUBLISH_ICON_DATA_URL = null;
   document.getElementById('app').innerHTML = '<div class="hdr"><div class="back" onclick="renderTopicEditor()">← Назад</div><h1>Публикация</h1></div><div class="loading">Загрузка списка курсов…</div>';
   try {
     var res = await fetch(API_BASE + '/api/admin/courses', { headers: apiHeaders() });
@@ -503,7 +541,11 @@ function buildPublishScreen() {
 
   if (PUBLISH_MODE === 'new_course') {
     h += '<input class="text-input" id="pub-title" type="text" placeholder="Название курса">'
-      + '<input class="text-input" id="pub-subtitle" type="text" placeholder="Описание (необязательно)">';
+      + '<input class="text-input" id="pub-subtitle" type="text" placeholder="Описание (необязательно)">'
+      + '<div class="icon-upload-row">'
+      + '<div class="icon-preview" id="icon-preview">' + (PUBLISH_ICON_DATA_URL ? '<img src="' + PUBLISH_ICON_DATA_URL + '" alt="">' : '📚') + '</div>'
+      + '<label class="icon-file-label">Загрузить иконку курса<input type="file" accept="image/*" style="display:none" onchange="onPublishIconSelected(this)"></label>'
+      + '</div>';
   } else {
     h += '<div class="section-label">Курс</div><div class="tlist">';
     if (!ADMIN_COURSES_LIST.length) {
@@ -535,7 +577,7 @@ async function submitPublish() {
     var title = document.getElementById('pub-title').value.trim();
     var subtitle = document.getElementById('pub-subtitle').value.trim();
     if (!title) { document.getElementById('publish-status').textContent = '❌ Введите название курса.'; return; }
-    body = { mode: 'new_course', title: title, subtitle: subtitle || undefined };
+    body = { mode: 'new_course', title: title, subtitle: subtitle || undefined, icon_data_url: PUBLISH_ICON_DATA_URL || undefined };
   } else {
     if (!PUBLISH_SELECTED_COURSE) { document.getElementById('publish-status').textContent = '❌ Выберите курс.'; return; }
     var dayTitle = document.getElementById('pub-day-title').value.trim();
