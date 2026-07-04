@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-04';
+var FRONTEND_VERSION = 'etap2-05';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -403,11 +403,50 @@ function buildDraftsScreen() {
         + '<div style="flex:1"><div class="uname">' + (d.video_title || 'Без названия') + '</div>'
         + '<div class="umeta">' + label + ' · ' + d.topic_count + ' тем</div></div>'
         + (clickable ? '<button class="topic-del-btn" style="color:var(--acc)" onclick="event.stopPropagation(); openEditViaChat(' + d.id + ')" title="Редактировать через чат бота">✏️</button>' : '')
+        + '<button class="topic-del-btn" onclick="event.stopPropagation(); confirmDeleteDraft(' + d.id + ')" title="Удалить черновик">🗑️</button>'
         + (clickable ? '<div class="barrow">▶</div>' : '') + '</div>';
     });
     h += '</div>';
   }
   document.getElementById('app').innerHTML = h;
+}
+
+// ─── Delete draft (destructive — confirmation required) ─────────────────
+// Same confirm-modal pattern as confirmDeleteUser/performDeleteUser above.
+
+function confirmDeleteDraft(id) {
+  var d = DRAFTS.find(function (x) { return x.id === id; });
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal-box">'
+    + '<div class="modal-title">Удалить черновик?</div>'
+    + '<div class="modal-warn">Это необратимо удалит черновик «' + (d ? (d.video_title || 'Без названия') : id) + '» и все его темы. Отменить это действие нельзя.</div>'
+    + '<div class="modal-btns">'
+    + '<button class="modal-btn modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Отмена</button>'
+    + '<button class="modal-btn modal-confirm" onclick="performDeleteDraft(' + id + ')">Да, удалить</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+}
+
+async function performDeleteDraft(id) {
+  var overlay = document.querySelector('.modal-overlay');
+  if (overlay) overlay.innerHTML = '<div class="modal-box"><div class="modal-title">Удаление…</div></div>';
+  try {
+    var res = await fetch(API_BASE + '/api/admin/pending-lessons/' + id + '/delete', {
+      method: 'POST',
+      headers: apiHeaders()
+    });
+    if (!res.ok) {
+      var text = await res.text().catch(function () { return ''; });
+      throw new Error(text.replace(/^\d+:\s*/, ''));
+    }
+    if (overlay) overlay.remove();
+    await renderDraftsScreen();
+  } catch (e) {
+    if (overlay) overlay.innerHTML = '<div class="modal-box"><div class="modal-title">Ошибка удаления</div>'
+      + '<div class="modal-warn">' + (e.message || 'Попробуйте снова.') + '</div>'
+      + '<div class="modal-btns"><button class="modal-btn modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Закрыть</button></div></div>';
+  }
 }
 
 // Standard Telegram deep-link pattern: opens the bot's chat with a
