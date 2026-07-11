@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-06';
+var FRONTEND_VERSION = 'etap2-07';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -29,6 +29,10 @@ var ADMIN_COURSES = [
 var USERS = [];
 var CURRENT_USER_IDX = null;
 var INITIAL_ACCESS = {};
+// Only the super-admin can grant admin rights (server enforces this too —
+// see _validate_make_admin in bot.py); populated by loadUsers() via
+// GET /api/admin/whoami before the add-user form can render its role picker.
+var IS_SUPER_ADMIN = false;
 
 function apiHeaders(extra) {
   var h = extra ? Object.assign({}, extra) : {};
@@ -68,6 +72,10 @@ async function loadUsers() {
     if (res.status === 401) { showFatal('🔒', 'Откройте панель через бота.'); return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     USERS = await res.json();
+    try {
+      var whoRes = await fetch(API_BASE + '/api/admin/whoami', { headers: apiHeaders() });
+      if (whoRes.ok) IS_SUPER_ADMIN = (await whoRes.json()).is_super_admin === true;
+    } catch (e) { /* not critical — role picker just stays participant-only */ }
     renderUserList();
   } catch (e) {
     showFatal('⚠️', 'Не удалось загрузить пользователей. Проверьте соединение и попробуйте снова.');
@@ -155,15 +163,23 @@ async function saveAccess() {
 // ─── Add user (by Telegram ID or phone) ────────────────────────────────
 
 var ADD_MODE = 'id';
+var ADD_ROLE = 'participant';
 
 function renderAddUserForm() {
   ADD_MODE = 'id';
+  ADD_ROLE = 'participant';
   var h = '<div class="hdr"><div class="back" onclick="renderUserList()">← К списку</div><h1>Добавить пользователя</h1></div>'
     + '<div class="tabs">'
     + '<button class="tab-btn active" id="tab-id" onclick="switchAddMode(\'id\')">По Telegram ID</button>'
     + '<button class="tab-btn" id="tab-phone" onclick="switchAddMode(\'phone\')">По номеру телефона</button>'
     + '</div>'
     + '<input class="text-input" id="add-input" type="text" inputmode="numeric" placeholder="Telegram ID, например 123456789">'
+    + '<div class="section-label">Роль</div><div class="tabs">'
+    + '<button class="tab-btn active" id="role-participant" onclick="switchAddRole(\'participant\')">👤 Обычный участник</button>';
+  if (IS_SUPER_ADMIN) {
+    h += '<button class="tab-btn" id="role-admin" onclick="switchAddRole(\'admin\')">🛠 Админ</button>';
+  }
+  h += '</div>'
     + '<div class="section-label">Выдать доступ к курсам</div><div class="tlist">';
   ADMIN_COURSES.forEach(function (c) {
     h += '<label class="ccheck"><input type="checkbox" data-add-course="' + c.id + '">'
@@ -188,6 +204,13 @@ function switchAddMode(mode) {
   }
 }
 
+function switchAddRole(role) {
+  ADD_ROLE = role;
+  document.getElementById('role-participant').classList.toggle('active', role === 'participant');
+  var adminBtn = document.getElementById('role-admin');
+  if (adminBtn) adminBtn.classList.toggle('active', role === 'admin');
+}
+
 async function submitAddUser() {
   var raw = document.getElementById('add-input').value.trim();
   var statusEl = document.getElementById('add-status');
@@ -196,16 +219,17 @@ async function submitAddUser() {
     if (cb.checked) courseIds.push(cb.getAttribute('data-add-course'));
   });
 
+  var isAdminRole = IS_SUPER_ADMIN && ADD_ROLE === 'admin';
   var url, body;
   if (ADD_MODE === 'id') {
     var idNum = parseInt(raw, 10);
     if (!raw || isNaN(idNum)) { statusEl.textContent = '❌ Введите корректный Telegram ID (число).'; return; }
     url = API_BASE + '/api/admin/add-user-by-id';
-    body = { user_id: idNum, course_ids: courseIds };
+    body = { user_id: idNum, course_ids: courseIds, is_admin: isAdminRole };
   } else {
     if (!raw) { statusEl.textContent = '❌ Введите номер телефона.'; return; }
     url = API_BASE + '/api/admin/add-user-by-phone';
-    body = { phone_number: raw, course_ids: courseIds };
+    body = { phone_number: raw, course_ids: courseIds, is_admin: isAdminRole };
   }
 
   statusEl.textContent = 'Добавление…';

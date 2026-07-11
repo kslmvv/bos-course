@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-06';
+var FRONTEND_VERSION = 'etap2-07';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -30,6 +30,7 @@ var SPEEDS = [1, 1.5, 2];
 var COURSE_DATA = null;
 var CURRENT_COURSE_ID = null;
 var MY_COURSES = [];
+var CONTINUE_WATCHING = null;
 
 // Per-course "continue watching" key. Keeps the pre-existing 'bos_progress'
 // key for the "bos" course so users don't lose their saved position across
@@ -73,6 +74,30 @@ function reportStats(day, topic, progress) {
     method: 'POST',
     headers: apiHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ day: day, topic: topic, progress: Math.max(0, Math.floor(progress || 0)) })
+  }).catch(function () {});
+}
+
+// Video-absolute resume position for "Продолжить просмотр" — separate from
+// reportStats (which is topic-segment-relative and only feeds admin
+// analytics). courseId is required; a call with none is a no-op (e.g. before
+// a course has finished loading).
+function reportWatchProgress(courseId, sectionKey, sectionLabel, topicIdx, topicTitle, positionSeconds, durationSeconds, completed) {
+  if (!courseId) return;
+  var url = API_BASE + '/api/watch-progress';
+  if (URL_TOKEN) url += '?token=' + encodeURIComponent(URL_TOKEN);
+  fetch(url, {
+    method: 'POST',
+    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      course_id: courseId,
+      section_key: sectionKey || '',
+      section_label: sectionLabel,
+      topic_idx: topicIdx,
+      topic_title: topicTitle,
+      position_seconds: Math.max(0, Math.floor(positionSeconds || 0)),
+      duration_seconds: durationSeconds ? Math.max(0, Math.floor(durationSeconds)) : null,
+      completed: !!completed
+    })
   }).catch(function () {});
 }
 
@@ -138,6 +163,8 @@ function reportProgress() {
     var segCur = Math.max(0, cur - (G.segStart || 0));
     if (G.segEnd && G.segEnd > G.segStart) segCur = Math.min(segCur, G.segEnd - G.segStart);
     reportStats(G.badgeText, topicLabel(G.idx), segCur);
+    reportWatchProgress(CURRENT_COURSE_ID, currentSectionKey(), G.badgeText, G.idx,
+      G.topics[G.idx] ? G.topics[G.idx].title : '', cur, pbarSegDur(), false);
   } catch (e) {}
 }
 
@@ -414,6 +441,8 @@ function showTopicEnd() {
   var dur = 0; try { dur = G.player.getDuration(); } catch (e) {}
   var segEnd = (G.segEnd && G.segEnd > segStart) ? G.segEnd : dur;
   reportStats(G.badgeText, topicLabel(G.idx), Math.max(0, segEnd - segStart));
+  reportWatchProgress(CURRENT_COURSE_ID, currentSectionKey(), G.badgeText, G.idx,
+    G.topics[G.idx] ? G.topics[G.idx].title : '', segEnd, segEnd - segStart, true);
   var o = document.getElementById('topic-end'); if (!o) return;
   var hasNext = G.idx < G.topics.length - 1;
   var nb = document.getElementById('te-next');
@@ -641,6 +670,21 @@ if (!IS_IOS) {
   window.addEventListener('pagehide', autoPiP);
 }
 
+// Flush the resume position immediately when the app is backgrounded or the
+// page is about to unload, rather than relying solely on the 5s/15s timers —
+// otherwise an abrupt close (Telegram WebView killed, tab closed) can lose
+// up to that many seconds of progress.
+function flushProgressOnExit() {
+  if (!G.playing) return;
+  saveProgress();
+  reportProgress();
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') flushProgressOnExit();
+});
+window.addEventListener('pagehide', flushProgressOnExit);
+window.addEventListener('beforeunload', flushProgressOnExit);
+
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
   saveProgress(); reportProgress();
@@ -671,6 +715,8 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId) {
   var pos = startPos !== undefined ? startPos : G.segStart;
   if (startPos === undefined) saveProgress();
   reportStats(badgeText, topicLabel(idx), Math.max(0, Math.floor(pos - G.segStart)));
+  reportWatchProgress(CURRENT_COURSE_ID, currentSectionKey(), badgeText, idx,
+    tp.title, pos, (G.segEnd && G.segEnd > G.segStart) ? (G.segEnd - G.segStart) : null, false);
 
   if (vid === G.currentVid && playerReady() && G.ready) {
     seekWithinVideo(pos);
@@ -880,10 +926,90 @@ function courseIconHtml(icon) {
   return icon || '📚';
 }
 
+// ─── "Продолжить просмотр" card (across all of the user's courses) ──────
+
+async function loadContinueWatching() {
+  try {
+    var res = await fetch(API_BASE + '/api/continue-watching', { headers: apiHeaders() });
+    if (!res.ok) return null;
+    var data = await res.json();
+    return (data && data.course_id) ? data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function continueWatchingCardHtml(cw) {
+  if (!cw) return '';
+  var pct = cw.duration_seconds ? Math.max(0, Math.min(100, Math.round(cw.position_seconds / cw.duration_seconds * 100))) : 0;
+  return '<div class="continue-card cw-card" onclick="openContinueWatching()">'
+    + '<div class="continue-label">▶ Продолжить просмотр</div>'
+    + '<div class="cw-body"><div class="course-ico cw-ico">' + courseIconHtml(cw.course_icon) + '</div>'
+    + '<div class="continue-title">' + cw.course_title + ' — ' + cw.section_label + '<br>'
+    + '<span style="font-size:13px;font-weight:400;color:var(--tx2)">' + cw.topic_title + '</span></div></div>'
+    + '<div class="cw-pbar"><div class="cw-pfill" style="width:' + pct + '%"></div></div>'
+    + '<div class="continue-btns"><button class="cbtn-cont" onclick="openContinueWatching(event)">Продолжить просмотр</button></div>'
+    + '</div>';
+}
+
+// Opens the exact (day/bonus/tool, topic) the saved progress points at, with
+// startPos set to the saved position instead of the topic's own startSeconds
+// — mirrors openFromParams's section_key parsing, but resuming rather than
+// starting the topic from its beginning.
+function openContinueWatchingTarget(cw) {
+  if (!COURSE_DATA) return false;
+  var idx = cw.topic_idx || 0;
+  var m = /^day-(\d+)$/.exec(cw.section_key || '');
+  if (m) {
+    var day = COURSE_DATA.days.find(function (d) { return d.id === parseInt(m[1], 10); });
+    if (!day || !day.topics[idx]) return false;
+    openPlayer(day.topics, idx, 'ДЕНЬ ' + day.id, function () { openDay(day.id); }, cw.position_seconds, day.videoHlsUrl);
+    return true;
+  }
+  m = /^bonus-(\d+)$/.exec(cw.section_key || '');
+  if (m) {
+    var b = COURSE_DATA.bonuses && COURSE_DATA.bonuses[parseInt(m[1], 10)];
+    if (!b || !b.topics[idx]) return false;
+    openPlayer(b.topics, idx, 'БОНУС ' + (parseInt(m[1], 10) + 1), function () { goTab('bonus'); }, cw.position_seconds);
+    return true;
+  }
+  m = /^tool-(\d+)$/.exec(cw.section_key || '');
+  if (m) {
+    var t = COURSE_DATA.tools && COURSE_DATA.tools[parseInt(m[1], 10)];
+    if (!t || !t.topics || !t.topics[idx]) return false;
+    openPlayer(t.topics, idx, t.title.toUpperCase(), function () { goTab('tools'); }, cw.position_seconds);
+    return true;
+  }
+  if (isSingleVideoCourse(COURSE_DATA) && COURSE_DATA.topics[idx]) {
+    openSingleVideoCourse();
+    openPlayer(COURSE_DATA.topics, idx, COURSE_DATA.title.toUpperCase(), openSingleVideoCourse, cw.position_seconds, COURSE_DATA.videoId);
+    return true;
+  }
+  return false;
+}
+
+async function openContinueWatching(e) {
+  if (e) e.stopPropagation();
+  var cw = CONTINUE_WATCHING;
+  if (!cw) return;
+  CURRENT_COURSE_ID = cw.course_id;
+  if (!(await loadCourseData(cw.course_id))) return;
+  if (!isSingleVideoCourse(COURSE_DATA)) {
+    buildHome(); buildBonus(); buildTools(); syncSectionNav();
+    document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById('s-home').classList.add('on');
+    document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+    document.getElementById('n-home').classList.add('on');
+    setNavVisible(true);
+  }
+  openContinueWatchingTarget(cw);
+}
+
 function buildMyCourses(courses, isAdmin) {
   var h = '<div class="mc-hdr"><div><h1>Мои курсы</h1><p>BilimBook</p></div>';
   if (isAdmin) h += '<button class="admin-btn" onclick="goAdmin()" title="Админ-панель">⚙️</button>';
   h += '</div>';
+  h += continueWatchingCardHtml(CONTINUE_WATCHING);
   if (!courses || !courses.length) {
     h += '<div class="empty-state">Пока нет доступных курсов.<br>Обратитесь к администратору.</div>';
   } else {
@@ -901,6 +1027,7 @@ async function initMyCoursesScreen() {
   var adminCheck = fetch(API_BASE + '/api/admin/users', { headers: apiHeaders() })
     .then(function (r) { return r.ok; })
     .catch(function () { return false; });
+  var cwCheck = loadContinueWatching();
 
   var mcRes;
   try {
@@ -919,6 +1046,7 @@ async function initMyCoursesScreen() {
   }
   MY_COURSES = await mcRes.json();
   var isAdmin = await adminCheck;
+  CONTINUE_WATCHING = await cwCheck;
   buildMyCourses(MY_COURSES, isAdmin);
 }
 
