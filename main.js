@@ -1057,6 +1057,80 @@ function isSingleVideoCourse(data) {
   return !!(data && Array.isArray(data.topics) && data.videoId);
 }
 
+// A course whose content is grouped into modules (course_data Этап 3, e.g.
+// "atm") — each module is a flat, position-ordered mix of videos and
+// non-video materials (PDFs). Detected structurally, same convention as
+// isSingleVideoCourse.
+function isModularCourse(data) {
+  return !!(data && Array.isArray(data.modules));
+}
+
+// Level 0 for a modular course: a card grid of its modules, reusing the
+// exact "day card" look from buildHome()'s COURSE_DATA.days grid.
+function openModulesHome() {
+  var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
+    + '<div class="hdr"><h1>' + (COURSE_DATA.title || '') + '</h1></div>'
+    + '<div class="stitle">Модули курса</div><div class="grid">';
+  COURSE_DATA.modules.forEach(function (m) {
+    h += '<div class="dcard" onclick="openModule(' + m.id + ')"><div class="n">' + m.id + '</div><div class="l">' + m.title + '</div><div class="c">' + m.items.length + ' элементов</div></div>';
+  });
+  h += '</div>';
+  document.getElementById('s-home').innerHTML = h;
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.getElementById('s-home').classList.add('on');
+  setNavVisible(false);
+}
+
+// Level 1: a module's flat items list (position-ordered mix of video and
+// pdf items), reusing the .bcard row look from buildBonus()/buildTools().
+// Video items drill into openModuleVideo (level 2, below); pdf items are a
+// stub for now — opening the file itself is a separate task.
+function openModule(id) {
+  var mod = COURSE_DATA.modules.find(function (m) { return m.id === id; });
+  if (!mod) return;
+  var h = '<div class="back" onclick="openModulesHome()">← Назад</div>'
+    + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + mod.title + '</div></div>';
+  mod.items.forEach(function (item, i) {
+    if (item.type === 'video') {
+      h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">🎬</div><div class="binfo"><h3>' + item.title + '</h3><p>' + item.topics.length + ' тем</p></div><div class="barrow">▶</div></div>';
+    } else if (item.type === 'pdf') {
+      // Placeholder card — no click handler yet, opening a PDF is a
+      // separate, not-yet-built frontend task.
+      h += '<div class="bcard"><div class="bico">📄</div><div class="binfo"><h3>' + item.title + '</h3><p>PDF</p></div><div class="barrow">Открыть</div></div>';
+    }
+  });
+  document.getElementById('s-module').innerHTML = h;
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.getElementById('s-module').classList.add('on');
+}
+
+// Level 2 for a video item inside a module: exactly openDay()'s topics-list
+// rendering (same markup/classes into #s-days), just sourced from the
+// module item instead of COURSE_DATA.days.find(...).
+function openModuleVideo(moduleId, itemIdx) {
+  var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
+  var item = mod && mod.items[itemIdx];
+  if (!item || item.type !== 'video') return;
+  var h = '<div class="back" onclick="openModule(' + moduleId + ')">← Назад</div>'
+    + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + item.title + '</div></div><div class="tlist">';
+  item.topics.forEach(function (tp, i) {
+    h += '<div class="titem" onclick="openModuleVideoTopic(' + moduleId + ',' + itemIdx + ',' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + '</div></div>';
+  });
+  document.getElementById('s-days').innerHTML = h + '</div>';
+  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.getElementById('s-days').classList.add('on');
+}
+
+// Level 3: hands off to the existing, unmodified openPlayer() — identical
+// to what openDayVideo() does for a plain day.
+function openModuleVideoTopic(moduleId, itemIdx, topicIdx) {
+  var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
+  var item = mod && mod.items[itemIdx];
+  if (!item) return;
+  var startPos = item.topics[topicIdx].startSeconds || 0;
+  openPlayer(item.topics, topicIdx, item.title.toUpperCase(), function () { openModuleVideo(moduleId, itemIdx); }, startPos, item.videoHlsUrl);
+}
+
 function openSingleVideoCourse() {
   var d = COURSE_DATA;
   var prog = loadProgress();
@@ -1085,6 +1159,10 @@ async function selectCourse(courseId) {
   if (!(await loadCourseData(courseId))) return;
   if (isSingleVideoCourse(COURSE_DATA)) {
     openSingleVideoCourse();
+    return;
+  }
+  if (isModularCourse(COURSE_DATA)) {
+    openModulesHome();
     return;
   }
   buildHome(); buildBonus(); buildTools(); syncSectionNav();
@@ -1130,6 +1208,10 @@ async function init() {
     if (isSingleVideoCourse(COURSE_DATA)) {
       openSingleVideoCourse();
       if (URL_TOPIC !== null) openSingleVideoTopic(parseInt(URL_TOPIC, 10) || 0);
+    } else if (isModularCourse(COURSE_DATA)) {
+      // Deep-linking into a specific module/item isn't supported yet —
+      // opens the modules list, same as a plain course-picker selection.
+      openModulesHome();
     } else {
       buildHome(); buildBonus(); buildTools(); syncSectionNav();
       document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
