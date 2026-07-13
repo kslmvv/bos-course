@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-09';
+var FRONTEND_VERSION = 'etap2-10';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -31,6 +31,7 @@ var COURSE_DATA = null;
 var CURRENT_COURSE_ID = null;
 var MY_COURSES = [];
 var CONTINUE_WATCHING = null;
+var IS_ADMIN = false;
 
 // Per-course "continue watching" key. Keeps the pre-existing 'bos_progress'
 // key for the "bos" course so users don't lose their saved position across
@@ -484,7 +485,12 @@ function nextTopicFromEnd() {
   hideTopicEnd();
   goNext();
 }
-function fmt(s) { s = Math.floor(s || 0); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+function fmt(s) {
+  s = Math.floor(s || 0);
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return h + ':' + ('0' + m).slice(-2) + ':' + ('0' + sec).slice(-2);
+  return m + ':' + ('0' + sec).slice(-2);
+}
 function syncPB() { var b = document.getElementById('pb'); if (!b) return; b.innerHTML = G.playing ? '<svg><use href="#i-pause"/></svg>' : '<svg><use href="#i-play"/></svg>'; }
 
 function clickBar(e) {
@@ -732,7 +738,7 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId, module
   G.segStart = tp.startSeconds || 0;
   G.segEnd = tp.endSeconds || 0;
 
-  document.getElementById('p-back').onclick = G.backFn;
+  document.getElementById('p-back').onclick = function () { stopVideo(); G.backFn(); };
   document.getElementById('p-header').innerHTML = '<span class="pbadge">' + G.badgeText + '</span><span class="pcnt">' + (G.idx + 1) + ' из ' + total + '</span>';
   document.getElementById('p-label').textContent = G.badgeText + ' — ТЕМА ' + (G.idx + 1);
   document.getElementById('p-title').textContent = tp.title;
@@ -1088,9 +1094,9 @@ async function initMyCoursesScreen() {
     return;
   }
   MY_COURSES = await mcRes.json();
-  var isAdmin = await adminCheck;
+  IS_ADMIN = await adminCheck;
   CONTINUE_WATCHING = await cwCheck;
-  buildMyCourses(MY_COURSES, isAdmin);
+  buildMyCourses(MY_COURSES, IS_ADMIN);
 }
 
 // A course whose content is a single video with timecoded topics (no
@@ -1235,6 +1241,15 @@ function backToMyCourses() {
   document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-mycourses').classList.add('on');
+  refreshContinueWatching();
+}
+
+// "Мои курсы" is only built once at bootstrap (initMyCoursesScreen) — without
+// this, watching a video and backing out wouldn't refresh the "Продолжить
+// просмотр" card until the WebApp itself was reopened.
+async function refreshContinueWatching() {
+  CONTINUE_WATCHING = await loadContinueWatching();
+  buildMyCourses(MY_COURSES, IS_ADMIN);
 }
 
 function goAdmin() {
