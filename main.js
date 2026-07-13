@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-10';
+var FRONTEND_VERSION = 'etap2-11';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -744,7 +744,7 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId, module
   document.getElementById('p-title').textContent = tp.title;
   document.getElementById('btn-prev').disabled = (G.idx === 0);
   document.getElementById('btn-next').disabled = (G.idx === total - 1);
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-player').classList.add('on');
 
@@ -777,10 +777,188 @@ function goNext() {
   }
 }
 
+// ─── PDF viewer (course_materials, module items with type==="pdf") ──────
+// Renders pages on a <canvas> via pdf.js instead of a native <embed>/<iframe>
+// — Telegram's in-app WebView (esp. Android) doesn't reliably ship a PDF
+// plugin. getDocument() only fetches the document structure up front and
+// streams individual pages via HTTP range requests, so per-page rendering
+// here is naturally lazy — no extra chunking logic needed on our side.
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/legacy/build/pdf.worker.min.js';
+}
+
+var PDF = {
+  doc: null, moduleId: null, itemIdx: null,
+  pageNum: 1, pageCount: 0, zoom: 1, baseScale: 1,
+  rendering: false, pending: false
+};
+
+function openModulePdf(moduleId, itemIdx) {
+  var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
+  var item = mod && mod.items[itemIdx];
+  if (!item || item.type !== 'pdf') return;
+  PDF.moduleId = moduleId; PDF.itemIdx = itemIdx;
+  PDF.doc = null; PDF.pageNum = 1; PDF.pageCount = 0; PDF.zoom = 1; PDF.rendering = false; PDF.pending = false;
+
+  document.getElementById('pdf-title').textContent = item.title;
+  document.getElementById('pdf-pageinfo').textContent = '';
+  document.getElementById('pdf-zlabel').textContent = '100%';
+  document.getElementById('pdf-wrap').scrollLeft = 0;
+  document.getElementById('pdf-wrap').scrollTop = 0;
+  hidePdfFallback();
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  document.getElementById('s-pdf').classList.add('on');
+
+  if (!window.pdfjsLib) { showPdfFallback(); return; }
+  document.getElementById('pdf-loading').classList.remove('hide');
+
+  var url = encodeURI(item.url);
+  pdfjsLib.getDocument(url).promise.then(function (doc) {
+    PDF.doc = doc;
+    PDF.pageCount = doc.numPages;
+    pdfRenderCurrent();
+  }).catch(function () {
+    document.getElementById('pdf-loading').classList.add('hide');
+    showPdfFallback();
+  });
+}
+
+function closePdf() {
+  if (PDF.doc) { try { PDF.doc.destroy(); } catch (e) {} }
+  var moduleId = PDF.moduleId;
+  PDF.doc = null; PDF.rendering = false; PDF.pending = false;
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
+  openModule(moduleId);
+}
+
+function showPdfFallback() { var o = document.getElementById('pdf-fallback'); if (o) o.classList.add('show'); }
+function hidePdfFallback() { var o = document.getElementById('pdf-fallback'); if (o) o.classList.remove('show'); }
+
+function openPdfExternally() {
+  var mod = COURSE_DATA.modules.find(function (m) { return m.id === PDF.moduleId; });
+  var item = mod && mod.items[PDF.itemIdx];
+  if (!item) return;
+  var url = encodeURI(item.url);
+  if (tg && tg.openLink) tg.openLink(url, { try_instant_view: false });
+  else window.open(url, '_blank');
+}
+
+// Always (re-)renders PDF.pageNum at PDF.zoom — page turns and zoom changes
+// both just update PDF state and call this. pdf.js throws if a second
+// render starts on the same canvas before the first finishes, so overlapping
+// calls (e.g. a quick zoom-then-page-turn) are coalesced via PDF.pending
+// instead of firing concurrently.
+function pdfRenderCurrent() {
+  if (!PDF.doc) return;
+  if (PDF.rendering) { PDF.pending = true; return; }
+  PDF.rendering = true;
+  PDF.doc.getPage(PDF.pageNum).then(function (page) {
+    var wrap = document.getElementById('pdf-wrap');
+    var dpr = window.devicePixelRatio || 1;
+    var natural = page.getViewport({ scale: 1 });
+    PDF.baseScale = wrap.clientWidth / natural.width;
+    var effScale = PDF.baseScale * PDF.zoom;
+    var viewport = page.getViewport({ scale: effScale * dpr });
+    var canvas = document.getElementById('pdf-canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.style.width = (viewport.width / dpr) + 'px';
+    canvas.style.height = (viewport.height / dpr) + 'px';
+    var ctx = canvas.getContext('2d');
+    return page.render({ canvasContext: ctx, viewport: viewport }).promise;
+  }).then(function () {
+    PDF.rendering = false;
+    document.getElementById('pdf-loading').classList.add('hide');
+    document.getElementById('pdf-pageinfo').textContent = PDF.pageNum + ' / ' + PDF.pageCount;
+    document.getElementById('pdf-zlabel').textContent = Math.round(PDF.zoom * 100) + '%';
+    if (PDF.pending) { PDF.pending = false; pdfRenderCurrent(); }
+  }).catch(function () {
+    PDF.rendering = false;
+    document.getElementById('pdf-loading').classList.add('hide');
+    showPdfFallback();
+  });
+}
+
+function pdfGoToPage(n) {
+  n = Math.max(1, Math.min(PDF.pageCount, n));
+  if (n === PDF.pageNum) return;
+  PDF.pageNum = n;
+  document.getElementById('pdf-wrap').scrollLeft = 0;
+  document.getElementById('pdf-wrap').scrollTop = 0;
+  pdfRenderCurrent();
+}
+
+function pdfSetZoom(z) {
+  PDF.zoom = Math.max(0.5, Math.min(3, z));
+  pdfRenderCurrent();
+}
+function pdfZoomIn() { pdfSetZoom(PDF.zoom + 0.25); }
+function pdfZoomOut() { pdfSetZoom(PDF.zoom - 0.25); }
+
+// Touch handling: two fingers always pinch-zoom (live CSS-transform preview,
+// real pdf.js re-render only on release — re-rasterizing on every touchmove
+// would be far too slow). One finger only turns pages, and only at 100%
+// zoom; above that, single-finger drags are left alone so the wrap's native
+// overflow:auto scroll pans the enlarged page instead.
+var pdfTouch = { mode: null, startX: 0, startY: 0, startDist: 0, startZoom: 1 };
+
+function pdfTouchDist(touches) {
+  var dx = touches[0].clientX - touches[1].clientX, dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function pdfTouchStart(e) {
+  if (e.touches.length === 2) {
+    pdfTouch.mode = 'pinch';
+    pdfTouch.startDist = pdfTouchDist(e.touches);
+    pdfTouch.startZoom = PDF.zoom;
+  } else if (e.touches.length === 1 && PDF.zoom <= 1.001) {
+    pdfTouch.mode = 'swipe';
+    pdfTouch.startX = e.touches[0].clientX;
+    pdfTouch.startY = e.touches[0].clientY;
+  } else {
+    pdfTouch.mode = null;
+  }
+}
+function pdfTouchMove(e) {
+  if (pdfTouch.mode === 'pinch' && e.touches.length === 2) {
+    e.preventDefault();
+    var factor = pdfTouchDist(e.touches) / pdfTouch.startDist;
+    document.getElementById('pdf-canvas').style.transform = 'scale(' + factor + ')';
+  } else if (pdfTouch.mode === 'swipe' && e.touches.length === 1) {
+    var dx = e.touches[0].clientX - pdfTouch.startX, dy = e.touches[0].clientY - pdfTouch.startY;
+    if (Math.abs(dx) > Math.abs(dy)) e.preventDefault();
+  }
+}
+function pdfTouchEnd(e) {
+  if (pdfTouch.mode === 'pinch') {
+    var canvas = document.getElementById('pdf-canvas');
+    var m = /scale\(([\d.]+)\)/.exec(canvas.style.transform || '');
+    canvas.style.transform = '';
+    pdfSetZoom(pdfTouch.startZoom * (m ? parseFloat(m[1]) : 1));
+  } else if (pdfTouch.mode === 'swipe') {
+    var t = (e.changedTouches && e.changedTouches[0]) || { clientX: pdfTouch.startX, clientY: pdfTouch.startY };
+    var dx = t.clientX - pdfTouch.startX, dy = t.clientY - pdfTouch.startY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      pdfGoToPage(PDF.pageNum + (dx < 0 ? 1 : -1));
+    }
+  }
+  pdfTouch.mode = null;
+}
+
+function initPdfViewer() {
+  var wrap = document.getElementById('pdf-wrap');
+  wrap.addEventListener('touchstart', pdfTouchStart, { passive: true });
+  wrap.addEventListener('touchmove', pdfTouchMove, { passive: false });
+  wrap.addEventListener('touchend', pdfTouchEnd, { passive: true });
+  window.addEventListener('resize', function () { if (PDF.doc) pdfRenderCurrent(); });
+}
+initPdfViewer();
+
 // ─── Navigation / screens ────────────────────────────────────────────────
 
 function goTab(t) {
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-' + t).classList.add('on'); document.getElementById('n-' + t).classList.add('on'); stopVideo();
 }
@@ -826,7 +1004,7 @@ function openDay(id) {
     h += '<div class="titem' + cls + '" onclick="openDayVideo(' + day.id + ',' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + (i === savedIdx ? ' ▶' : '') + '</div></div>';
   });
   document.getElementById('s-days').innerHTML = h + '</div>';
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-days').classList.add('on'); document.getElementById('n-home').classList.add('on');
 }
@@ -838,7 +1016,7 @@ function openDayVideo(dayId, idx) {
 }
 function goHome() {
   stopVideo();
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   buildHome(); document.getElementById('s-home').classList.add('on'); document.getElementById('n-home').classList.add('on');
 }
@@ -1045,7 +1223,7 @@ async function openContinueWatching(e) {
     openModulesHome();
   } else if (!isSingleVideoCourse(COURSE_DATA)) {
     buildHome(); buildBonus(); buildTools(); syncSectionNav();
-    document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+    document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
     document.getElementById('s-home').classList.add('on');
     document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
     document.getElementById('n-home').classList.add('on');
@@ -1125,7 +1303,7 @@ function openModulesHome() {
   });
   h += '</div>';
   document.getElementById('s-home').innerHTML = h;
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-home').classList.add('on');
   setNavVisible(false);
 }
@@ -1143,13 +1321,11 @@ function openModule(id) {
     if (item.type === 'video') {
       h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">🎬</div><div class="binfo"><h3>' + item.title + '</h3><p>' + (item.topics.length ? item.topics.length + ' тем' : 'Видео') + '</p></div><div class="barrow">▶</div></div>';
     } else if (item.type === 'pdf') {
-      // Placeholder card — no click handler yet, opening a PDF is a
-      // separate, not-yet-built frontend task.
-      h += '<div class="bcard"><div class="bico">📄</div><div class="binfo"><h3>' + item.title + '</h3><p>PDF</p></div><div class="barrow">Открыть</div></div>';
+      h += '<div class="bcard" onclick="openModulePdf(' + id + ',' + i + ')"><div class="bico">📄</div><div class="binfo"><h3>' + item.title + '</h3><p>PDF</p></div><div class="barrow">Открыть</div></div>';
     }
   });
   document.getElementById('s-module').innerHTML = h;
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-module').classList.add('on');
 }
 
@@ -1172,7 +1348,7 @@ function openModuleVideo(moduleId, itemIdx) {
     h += '<div class="titem" onclick="openModuleVideoTopic(' + moduleId + ',' + itemIdx + ',' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + '</div></div>';
   });
   document.getElementById('s-days').innerHTML = h + '</div>';
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-days').classList.add('on');
 }
 
@@ -1202,7 +1378,7 @@ function openSingleVideoCourse() {
     h += '<div class="titem' + cls + '" onclick="openSingleVideoTopic(' + i + ')"><div class="tnum">' + (i + 1) + '</div><div class="tname">' + tp.title + (i === savedIdx ? ' ▶' : '') + '</div></div>';
   });
   document.getElementById('s-days').innerHTML = h + '</div>';
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-days').classList.add('on');
   setNavVisible(false);
@@ -1226,7 +1402,7 @@ async function selectCourse(courseId) {
     return;
   }
   buildHome(); buildBonus(); buildTools(); syncSectionNav();
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-home').classList.add('on');
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('n-home').classList.add('on');
@@ -1238,7 +1414,7 @@ function backToMyCourses() {
   CURRENT_COURSE_ID = null;
   COURSE_DATA = null;
   setNavVisible(false);
-  document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-mycourses').classList.add('on');
   refreshContinueWatching();
@@ -1283,7 +1459,7 @@ async function init() {
       openModulesHome();
     } else {
       buildHome(); buildBonus(); buildTools(); syncSectionNav();
-      document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
+      document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
       document.getElementById('s-home').classList.add('on');
       setNavVisible(true);
       openFromParams(URL_DAY, URL_TOPIC);
