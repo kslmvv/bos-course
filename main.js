@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-08';
+var FRONTEND_VERSION = 'etap2-09';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -44,6 +44,7 @@ var G = {
   player: null, mode: null, ytPlayer: null, ytReady: false, video: null, hls: null, pipSupported: false,
   playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
+  ytFallbackTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
   dragging: false, dragPct: 0, fsCoverTimer: null, speed: 1, theme: 'dark'
 };
@@ -222,16 +223,17 @@ function onYouTubeIframeAPIReady() {
       onStateChange: function (e) {
         if (G.mode !== 'yt') return;
         G.playing = (e.data === YT.PlayerState.PLAYING);
-        if (G.playing) { G.ready = true; applySpeed(); startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
+        if (G.playing) { clearTimeout(G.ytFallbackTimer); hideYtFallback(); G.ready = true; applySpeed(); startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
         else { clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); }
         syncPB();
-      }
+      },
+      onError: function () { showYtFallback(); }
     }
   });
 }
 
 function resetPlayerUI() {
-  clearInterval(G.progTimer); G.topicEndShown = false; hideTopicEnd();
+  clearInterval(G.progTimer); G.topicEndShown = false; hideTopicEnd(); hideYtFallback();
   var pf = document.getElementById('pf'); if (pf) pf.style.width = '0%';
   var tc = document.getElementById('tc'); if (tc) tc.textContent = '0:00';
   var td = document.getElementById('td'); if (td) td.textContent = fmt(G.segEnd && G.segEnd > G.segStart ? G.segEnd - G.segStart : 0);
@@ -265,10 +267,35 @@ function loadVideo(vid, startPos) {
     G.ytPlayer.loadVideoById({ videoId: vid, startSeconds: startPos });
     G.ready = true;
     applySpeed();
+    scheduleYtFallbackCheck(vid);
   } else {
     G.pendingVid = vid; G.pendingPos = startPos;
+    scheduleYtFallbackCheck(vid);
   }
   G.currentVid = vid;
+}
+
+// Страховка: YouTube иногда блокирует embed-плеер проверкой "вы не бот" без
+// onError через IFrame API — если playback не начался за разумное время,
+// предлагаем открыть видео напрямую на YouTube вместо висящего плеера.
+function scheduleYtFallbackCheck(vid) {
+  clearTimeout(G.ytFallbackTimer);
+  G.ytFallbackTimer = setTimeout(function () {
+    if (G.mode === 'yt' && G.currentVid === vid && !G.playing) showYtFallback();
+  }, 12000);
+}
+function showYtFallback() {
+  clearTimeout(G.ytFallbackTimer);
+  var o = document.getElementById('yt-fallback'); if (o) o.classList.add('show');
+}
+function hideYtFallback() {
+  var o = document.getElementById('yt-fallback'); if (o) o.classList.remove('show');
+}
+function openOnYouTube() {
+  var vid = G.currentVid; if (!vid || /^https?:\/\//.test(vid)) return;
+  var url = 'https://www.youtube.com/watch?v=' + encodeURIComponent(vid);
+  if (tg && tg.openLink) tg.openLink(url, { try_instant_view: false });
+  else window.open(url, '_blank');
 }
 
 // Same video already loaded for a different topic of the same day:
@@ -687,6 +714,7 @@ window.addEventListener('beforeunload', flushProgressOnExit);
 
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
+  clearTimeout(G.ytFallbackTimer); hideYtFallback();
   saveProgress(); reportProgress();
   if (playerReady()) { try { G.player.stopVideo(); } catch (e) {} }
   G.playing = false; syncPB(); hideCtrl();
