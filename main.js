@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-07';
+var FRONTEND_VERSION = 'etap2-08';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -40,7 +40,7 @@ function progressKey() {
 }
 
 var G = {
-  topics: [], idx: 0, badgeText: '', backFn: null,
+  topics: [], idx: 0, badgeText: '', backFn: null, moduleId: null, itemIdx: null,
   player: null, mode: null, ytPlayer: null, ytReady: false, video: null, hls: null, pipSupported: false,
   playing: false, ready: false, fs: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
@@ -694,9 +694,11 @@ function stopVideo() {
 
 // ─── Player screen ────────────────────────────────────────────────────
 
-function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId) {
+function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId, moduleId, itemIdx) {
   G.topics = topics; G.idx = idx; G.badgeText = badgeText; G.backFn = backFn;
   G.dayVideoId = dayVideoId || null;
+  G.moduleId = (moduleId === undefined) ? null : moduleId;
+  G.itemIdx = (itemIdx === undefined) ? null : itemIdx;
   var tp = G.topics[G.idx]; var total = G.topics.length;
   var vid = G.dayVideoId || tp.videoId || '';
   G.segStart = tp.startSeconds || 0;
@@ -731,13 +733,13 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId) {
 function goPrev() {
   if (G.idx > 0) {
     var newIdx = G.idx - 1;
-    openPlayer(G.topics, newIdx, G.badgeText, G.backFn, G.topics[newIdx].startSeconds || 0, G.dayVideoId);
+    openPlayer(G.topics, newIdx, G.badgeText, G.backFn, G.topics[newIdx].startSeconds || 0, G.dayVideoId, G.moduleId, G.itemIdx);
   }
 }
 function goNext() {
   if (G.idx < G.topics.length - 1) {
     var newIdx = G.idx + 1;
-    openPlayer(G.topics, newIdx, G.badgeText, G.backFn, G.topics[newIdx].startSeconds || 0, G.dayVideoId);
+    openPlayer(G.topics, newIdx, G.badgeText, G.backFn, G.topics[newIdx].startSeconds || 0, G.dayVideoId, G.moduleId, G.itemIdx);
   }
 }
 
@@ -846,6 +848,7 @@ function openTool(i) {
 // ─── Открыть в браузере ───────────────────────────────────────────────
 
 function currentSectionKey() {
+  if (G.moduleId != null && G.itemIdx != null) return 'module-' + G.moduleId + '-' + G.itemIdx;
   var m = /^ДЕНЬ (\d+)$/.exec(G.badgeText);
   if (m) return 'day-' + m[1];
   m = /^БОНУС (\d+)$/.exec(G.badgeText);
@@ -980,6 +983,16 @@ function openContinueWatchingTarget(cw) {
     openPlayer(t.topics, idx, t.title.toUpperCase(), function () { goTab('tools'); }, cw.position_seconds);
     return true;
   }
+  m = /^module-(\d+)-(\d+)$/.exec(cw.section_key || '');
+  if (m) {
+    var modId = parseInt(m[1], 10), itmIdx = parseInt(m[2], 10);
+    var mod = COURSE_DATA.modules && COURSE_DATA.modules.find(function (mm) { return mm.id === modId; });
+    var item = mod && mod.items[itmIdx];
+    if (!item || item.type !== 'video') return false;
+    var topics = item.topics.length ? item.topics : [{ title: item.title, startSeconds: 0 }];
+    openPlayer(topics, idx, item.title.toUpperCase(), function () { openModule(modId); }, cw.position_seconds, item.videoHlsUrl, modId, itmIdx);
+    return true;
+  }
   if (isSingleVideoCourse(COURSE_DATA) && COURSE_DATA.topics[idx]) {
     openSingleVideoCourse();
     openPlayer(COURSE_DATA.topics, idx, COURSE_DATA.title.toUpperCase(), openSingleVideoCourse, cw.position_seconds, COURSE_DATA.videoId);
@@ -994,7 +1007,9 @@ async function openContinueWatching(e) {
   if (!cw) return;
   CURRENT_COURSE_ID = cw.course_id;
   if (!(await loadCourseData(cw.course_id))) return;
-  if (!isSingleVideoCourse(COURSE_DATA)) {
+  if (isModularCourse(COURSE_DATA)) {
+    openModulesHome();
+  } else if (!isSingleVideoCourse(COURSE_DATA)) {
     buildHome(); buildBonus(); buildTools(); syncSectionNav();
     document.querySelectorAll('.sc,#s-player').forEach(function (s) { s.classList.remove('on'); });
     document.getElementById('s-home').classList.add('on');
@@ -1092,7 +1107,7 @@ function openModule(id) {
     + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + mod.title + '</div></div>';
   mod.items.forEach(function (item, i) {
     if (item.type === 'video') {
-      h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">🎬</div><div class="binfo"><h3>' + item.title + '</h3><p>' + item.topics.length + ' тем</p></div><div class="barrow">▶</div></div>';
+      h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">🎬</div><div class="binfo"><h3>' + item.title + '</h3><p>' + (item.topics.length ? item.topics.length + ' тем' : 'Видео') + '</p></div><div class="barrow">▶</div></div>';
     } else if (item.type === 'pdf') {
       // Placeholder card — no click handler yet, opening a PDF is a
       // separate, not-yet-built frontend task.
@@ -1111,6 +1126,12 @@ function openModuleVideo(moduleId, itemIdx) {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
   var item = mod && mod.items[itemIdx];
   if (!item || item.type !== 'video') return;
+  // Тем ещё нет (админ не разбил видео на темы) — сразу плеер на всё видео,
+  // без промежуточного пустого списка тем.
+  if (item.topics.length === 0) {
+    openModuleVideoTopic(moduleId, itemIdx, 0);
+    return;
+  }
   var h = '<div class="back" onclick="openModule(' + moduleId + ')">← Назад</div>'
     + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + item.title + '</div></div><div class="tlist">';
   item.topics.forEach(function (tp, i) {
@@ -1127,8 +1148,13 @@ function openModuleVideoTopic(moduleId, itemIdx, topicIdx) {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
   var item = mod && mod.items[itemIdx];
   if (!item) return;
-  var startPos = item.topics[topicIdx].startSeconds || 0;
-  openPlayer(item.topics, topicIdx, item.title.toUpperCase(), function () { openModuleVideo(moduleId, itemIdx); }, startPos, item.videoHlsUrl);
+  // No topics yet -> one synthetic topic spanning the whole video (openPlayer
+  // already treats a topic with no endSeconds as "play to the end").
+  var hasTopics = item.topics.length > 0;
+  var topics = hasTopics ? item.topics : [{ title: item.title, startSeconds: 0 }];
+  var startPos = topics[topicIdx].startSeconds || 0;
+  var backFn = hasTopics ? function () { openModuleVideo(moduleId, itemIdx); } : function () { openModule(moduleId); };
+  openPlayer(topics, topicIdx, item.title.toUpperCase(), backFn, startPos, item.videoHlsUrl, moduleId, itemIdx);
 }
 
 function openSingleVideoCourse() {
