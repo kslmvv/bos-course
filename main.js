@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-11';
+var FRONTEND_VERSION = 'etap2-13';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -793,6 +793,16 @@ var PDF = {
   rendering: false, pending: false
 };
 
+// Derives our own /api/pdf-proxy URL from a raw R2 storage_url —
+// pub-*.r2.dev doesn't support CORS preflight, which blocks pdf.js's
+// Range-based fetches before they reach R2. openPdfExternally() deliberately
+// keeps using the raw R2 URL — a plain browser navigation isn't subject to
+// CORS at all.
+function pdfProxyUrl(rawUrl) {
+  var key = rawUrl.replace(/^https?:\/\/[^/]+\//, '');
+  return API_BASE + '/api/pdf-proxy?key=' + encodeURIComponent(key);
+}
+
 function openModulePdf(moduleId, itemIdx) {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
   var item = mod && mod.items[itemIdx];
@@ -813,12 +823,13 @@ function openModulePdf(moduleId, itemIdx) {
   if (!window.pdfjsLib) { showPdfFallback(); return; }
   document.getElementById('pdf-loading').classList.remove('hide');
 
-  var url = encodeURI(item.url);
+  var url = pdfProxyUrl(item.url);
   pdfjsLib.getDocument(url).promise.then(function (doc) {
     PDF.doc = doc;
     PDF.pageCount = doc.numPages;
     pdfRenderCurrent();
-  }).catch(function () {
+  }).catch(function (err) {
+    console.error('pdf.js getDocument failed:', err);
     document.getElementById('pdf-loading').classList.add('hide');
     showPdfFallback();
   });
@@ -873,7 +884,8 @@ function pdfRenderCurrent() {
     document.getElementById('pdf-pageinfo').textContent = PDF.pageNum + ' / ' + PDF.pageCount;
     document.getElementById('pdf-zlabel').textContent = Math.round(PDF.zoom * 100) + '%';
     if (PDF.pending) { PDF.pending = false; pdfRenderCurrent(); }
-  }).catch(function () {
+  }).catch(function (err) {
+    console.error('pdf.js page render failed:', err);
     PDF.rendering = false;
     document.getElementById('pdf-loading').classList.add('hide');
     showPdfFallback();
