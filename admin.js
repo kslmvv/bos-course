@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-13';
+var FRONTEND_VERSION = 'etap2-14';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
