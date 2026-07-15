@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-18';
+var FRONTEND_VERSION = 'etap2-19';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -810,6 +810,10 @@ function pdfProxyUrl(rawUrl) {
 // fire-and-forget and non-blocking; fetch+keepalive is the fallback where
 // it's unavailable. Logged server-side only, see bot.py:handle_client_error.
 function reportClientError(context, err) {
+  console.log('reportClientError called', context);
+  var statusEl = document.getElementById('pdf-error-status');
+  function setStatus(text) { if (statusEl) statusEl.textContent = text; }
+  setStatus('Отправка отчёта об ошибке…');
   try {
     var payload = JSON.stringify({
       message: err && err.message ? String(err.message) : String(err),
@@ -818,11 +822,16 @@ function reportClientError(context, err) {
     });
     var url = API_BASE + '/api/client-error';
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, new Blob([payload], { type: 'text/plain' }));
+      var queued = navigator.sendBeacon(url, new Blob([payload], { type: 'text/plain' }));
+      setStatus(queued ? 'Отчёт отправлен (sendBeacon)' : 'sendBeacon отклонил отправку');
     } else {
-      fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: payload, keepalive: true }).catch(function () {});
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: payload, keepalive: true })
+        .then(function () { setStatus('Отчёт отправлен (fetch)'); })
+        .catch(function (e) { setStatus('Не удалось отправить: ' + (e && e.message ? e.message : e)); });
     }
-  } catch (e) {}
+  } catch (e) {
+    setStatus('Ошибка при подготовке отчёта: ' + (e && e.message ? e.message : e));
+  }
 }
 
 function openModulePdf(moduleId, itemIdx) {
@@ -867,7 +876,10 @@ function closePdf() {
 }
 
 function showPdfFallback() { var o = document.getElementById('pdf-fallback'); if (o) o.classList.add('show'); }
-function hidePdfFallback() { var o = document.getElementById('pdf-fallback'); if (o) o.classList.remove('show'); }
+function hidePdfFallback() {
+  var o = document.getElementById('pdf-fallback'); if (o) o.classList.remove('show');
+  var s = document.getElementById('pdf-error-status'); if (s) s.textContent = '';
+}
 
 function openPdfExternally() {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === PDF.moduleId; });
