@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-20';
+var FRONTEND_VERSION = 'etap2-21';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -876,6 +876,7 @@ function closePdf() {
   if (PDF.doc) { try { PDF.doc.destroy(); } catch (e) {} }
   var moduleId = PDF.moduleId;
   PDF.doc = null; PDF.rendering = false; PDF.pending = false;
+  document.getElementById('s-pdf').classList.remove('fs');
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   openModule(moduleId);
 }
@@ -923,6 +924,8 @@ function pdfRenderCurrent() {
     document.getElementById('pdf-loading').classList.add('hide');
     document.getElementById('pdf-pageinfo').textContent = PDF.pageNum + ' / ' + PDF.pageCount;
     document.getElementById('pdf-zlabel').textContent = Math.round(PDF.zoom * 100) + '%';
+    document.getElementById('pdf-btn-prev').disabled = (PDF.pageNum <= 1);
+    document.getElementById('pdf-btn-next').disabled = (PDF.pageNum >= PDF.pageCount);
     if (PDF.pending) { PDF.pending = false; pdfRenderCurrent(); }
   }).catch(function (err) {
     console.error('pdf.js page render failed:', err);
@@ -948,6 +951,24 @@ function pdfSetZoom(z) {
 }
 function pdfZoomIn() { pdfSetZoom(PDF.zoom + 0.25); }
 function pdfZoomOut() { pdfSetZoom(PDF.zoom - 0.25); }
+
+// CSS-only fullscreen (unlike the video player's doFS(), no Telegram/browser
+// Fullscreen API tier) — #s-pdf.fs just takes over the viewport via
+// position:fixed; #pdf-wrap already fills remaining flex space, so it grows
+// automatically once the back link/title are hidden. pdf-wrap/pdf-canvas
+// aren't recreated, so touch handlers (pinch/swipe/pan) keep working
+// unchanged; a forced re-render picks up the new (larger) container size.
+function pdfToggleFullscreen() {
+  var s = document.getElementById('s-pdf');
+  s.classList.toggle('fs');
+  syncPdfFS();
+  if (PDF.doc) pdfRenderCurrent();
+}
+function syncPdfFS() {
+  var b = document.getElementById('pdf-fsb'); if (!b) return;
+  var isFs = document.getElementById('s-pdf').classList.contains('fs');
+  b.innerHTML = isFs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>';
+}
 
 // Touch handling: two fingers always pinch-zoom (live CSS-transform preview,
 // real pdf.js re-render only on release — re-rasterizing on every touchmove
