@@ -6,7 +6,13 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-25';
+var FRONTEND_VERSION = 'etap2-26';
+
+// Permanent (not debug-only) on-screen version marker — cheap way to confirm
+// what's actually loaded on a device without relying on Telegram WebView
+// caching having already been busted, and without the Eruda/debug-flag
+// machinery this replaced.
+(function () { var b = document.getElementById('ver-badge'); if (b) b.textContent = 'v=' + FRONTEND_VERSION; })();
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -667,6 +673,8 @@ document.addEventListener('MSFullscreenChange', function () { if (!document.msFu
 if (tgFSSupported()) {
   tg.onEvent('fullscreenChanged', function () {
     if (pdfScreenOpen()) {
+      clearTimeout(pdfFsWatchdog);
+      reportClientError('PDF FS fullscreenChanged event fired', 'tg.isFullscreen=' + tg.isFullscreen);
       applyPdfFsState(!!tg.isFullscreen);
       try { if (tg.isFullscreen) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
       return;
@@ -684,7 +692,12 @@ if (tgFSSupported()) {
     G.fsCoverTimer = setTimeout(fsCoverOff, 400);
   });
   tg.onEvent('fullscreenFailed', function () {
-    if (pdfScreenOpen()) { pdfCssFS(); return; }
+    if (pdfScreenOpen()) {
+      clearTimeout(pdfFsWatchdog);
+      reportClientError('PDF FS fullscreenFailed event fired', 'Telegram API gives no further detail');
+      pdfCssFS();
+      return;
+    }
     var w = document.getElementById('vw'); if (w) cssFS(w);
     clearTimeout(G.fsCoverTimer);
     G.fsCoverTimer = setTimeout(fsCoverOff, 400);
@@ -987,11 +1000,38 @@ function pdfScreenOpen() {
   return !!(el && el.classList.contains('on'));
 }
 
+// Temporary — same rationale as reportClientError above: the user reported
+// "fullscreen doesn't work" for PDF, which could mean the button did nothing,
+// tg.requestFullscreen() threw, or it ran but fullscreenChanged/failed never
+// fired. Logs each step server-side so the actual failure point is visible
+// without relying on on-device DevTools. Remove once diagnosed.
+var pdfFsWatchdog = null;
 function pdfDoFS() {
   var w = document.getElementById('s-pdf'); if (!w) return;
+  reportClientError('PDF FS click',
+    'tgFSSupported=' + tgFSSupported()
+    + ' typeof(tg)=' + typeof tg
+    + ' typeof(tg.requestFullscreen)=' + (tg ? typeof tg.requestFullscreen : 'n/a')
+    + ' isVersionAtLeast(8.0)=' + (tg && tg.isVersionAtLeast ? tg.isVersionAtLeast('8.0') : 'n/a')
+    + ' tg.platform=' + (tg ? tg.platform : 'n/a')
+    + ' tg.version=' + (tg ? tg.version : 'n/a')
+    + ' PDF.fs=' + PDF.fs);
   if (tgFSSupported()) {
-    if (PDF.fs) { try { tg.exitFullscreen(); } catch (e) {} return; }
-    try { tg.requestFullscreen(); } catch (e) {}
+    if (PDF.fs) {
+      try { tg.exitFullscreen(); } catch (e) { reportClientError('PDF FS tg.exitFullscreen() threw', e); }
+      return;
+    }
+    clearTimeout(pdfFsWatchdog);
+    pdfFsWatchdog = setTimeout(function () {
+      reportClientError('PDF FS watchdog', 'no fullscreenChanged/fullscreenFailed event within 3000ms of tg.requestFullscreen()');
+    }, 3000);
+    try {
+      var ret = tg.requestFullscreen();
+      reportClientError('PDF FS tg.requestFullscreen() called', 'return=' + (ret === undefined ? 'undefined' : String(ret)));
+    } catch (e) {
+      clearTimeout(pdfFsWatchdog);
+      reportClientError('PDF FS tg.requestFullscreen() threw', e);
+    }
     return;
   }
   var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
