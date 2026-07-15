@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-24';
+var FRONTEND_VERSION = 'etap2-25';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -927,7 +927,9 @@ function pdfRenderCurrent() {
     var wrap = document.getElementById('pdf-wrap');
     var dpr = window.devicePixelRatio || 1;
     var natural = page.getViewport({ scale: 1 });
-    PDF.baseScale = wrap.clientWidth / natural.width;
+    var scaleW = wrap.clientWidth / natural.width;
+    var scaleH = wrap.clientHeight / natural.height;
+    PDF.baseScale = Math.min(scaleW, scaleH);
     var effScale = PDF.baseScale * PDF.zoom;
     var viewport = page.getViewport({ scale: effScale * dpr });
     var canvas = document.getElementById('pdf-canvas');
