@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-27';
+var FRONTEND_VERSION = 'etap2-28';
 
 // Permanent (not debug-only) on-screen version marker — cheap way to confirm
 // what's actually loaded on a device without relying on Telegram WebView
@@ -1057,27 +1057,40 @@ function pdfOnFsEnterResult() {
   if (nowFs) { applyPdfFsState(true); }
   else { pdfCssFS(); }
 }
-// Temporary — the video player's identical fullscreen callback path works
-// correctly on this same device, but the PDF screen's own #s-pdf.fs CSS
-// (position:fixed;inset:0, and hiding .back/#pdf-title) visibly doesn't take
-// effect even though fullscreenChanged does fire and this function does run
-// (confirmed via the pdfFsWatchdog logging above). Reads the DOM/computed
-// style back out immediately and again after 500ms, to see whether the class
-// is actually present and whether the CSS rule is actually matching, instead
-// of guessing. Remove once diagnosed.
+// Temporary — computed style read back "correct" (display:none) at both t=0
+// and t=500ms in the previous round, yet the on-device screenshot still
+// shows "← Назад". Two remaining explanations: (a) the diagnostic was
+// reading the wrong .back node (there are two in the document — #p-back on
+// the video screen, and PDF's own unlabeled .back), or (b) the DOM/CSS state
+// really is correct and this is a stale-paint/compositing bug (iOS WebKit is
+// known to sometimes not repaint a position:fixed subtree whose sibling was
+// hidden mid-viewport-resize). scopedBackParentIsW + the full allBacksInDoc
+// dump settles (a); getBoundingClientRect settles (b) — display:none must
+// collapse it to a 0x0 rect regardless of any paint/compositing bug.
+function pdfDumpBackState(label) {
+  var w = document.getElementById('s-pdf'); if (!w) return;
+  var back = w.querySelector('.back');
+  var rect = back ? back.getBoundingClientRect() : null;
+  var all = document.querySelectorAll('.back');
+  var allInfo = Array.prototype.map.call(all, function (el) {
+    return '[id=' + (el.id || 'none') + ' parentId=' + (el.parentElement ? el.parentElement.id : 'none')
+      + ' parentClass=' + (el.parentElement ? el.parentElement.className : 'none')
+      + ' display=' + getComputedStyle(el).display + ']';
+  }).join(' ');
+  reportClientError('PDF FS ' + label,
+    'className=' + w.className
+    + ' computedPosition=' + getComputedStyle(w).position
+    + ' computedInset=' + getComputedStyle(w).top + '/' + getComputedStyle(w).right + '/' + getComputedStyle(w).bottom + '/' + getComputedStyle(w).left
+    + ' scopedBackParentIsW=' + (back ? (back.parentElement === w) : 'no-back-found-in-w')
+    + ' scopedBackDisplay=' + (back ? getComputedStyle(back).display : 'n/a')
+    + ' scopedBackRect=' + (rect ? (rect.width + 'x' + rect.height + '@' + rect.top + ',' + rect.left) : 'n/a')
+    + ' allBacksInDoc=' + all.length + ' ' + allInfo);
+}
 function applyPdfFsState(isFs) {
   var w = document.getElementById('s-pdf'); if (!w) return;
   PDF.fs = isFs; w.classList.toggle('fs', PDF.fs);
-  reportClientError('PDF FS applyPdfFsState applied',
-    'isFs=' + isFs + ' className=' + w.className + ' computedPosition=' + getComputedStyle(w).position);
-  setTimeout(function () {
-    var back = w.querySelector('.back');
-    reportClientError('PDF FS applyPdfFsState +500ms readback',
-      'className=' + w.className
-      + ' computedPosition=' + getComputedStyle(w).position
-      + ' computedInset=' + getComputedStyle(w).top + '/' + getComputedStyle(w).right + '/' + getComputedStyle(w).bottom + '/' + getComputedStyle(w).left
-      + ' backDisplay=' + (back ? getComputedStyle(back).display : 'no .back element found'));
-  }, 500);
+  pdfDumpBackState('applyPdfFsState applied');
+  setTimeout(function () { pdfDumpBackState('applyPdfFsState +500ms readback'); }, 500);
   syncPdfFS();
   if (PDF.doc) pdfRenderCurrent();
 }

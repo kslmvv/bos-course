@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-27';
+var FRONTEND_VERSION = 'etap2-28';
 
 // Permanent (not debug-only) on-screen version marker — see main.js's copy.
 (function () { var b = document.getElementById('ver-badge'); if (b) b.textContent = 'v=' + FRONTEND_VERSION; })();
