@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-23';
+var FRONTEND_VERSION = 'etap2-24';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -649,6 +649,12 @@ function cssFS(w) { applyFsState(w, !G.fs); }
 function applyFsSize(w) { var W = window.innerWidth, H = window.innerHeight; w.style.width = W + 'px'; w.style.height = H + 'px'; var media = activeMediaEl(w); if (media) { media.style.width = W + 'px'; media.style.height = H + 'px'; } }
 function syncFS() { var b = document.getElementById('fsb'); if (!b) return; b.innerHTML = G.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>'; }
 function exitNativeFS() {
+  // Telegram's requestFullscreen()/the standard Fullscreen API are both
+  // WebApp/document-wide, not per-element — only whichever screen was open
+  // when fullscreen was requested can plausibly be "the" target, so this
+  // (and the three tg.onEvent handlers below) check which screen is
+  // currently open rather than tracking a separate ownership flag.
+  if (pdfScreenOpen()) { applyPdfFsState(false); return; }
   G.fs = false; syncFS();
   var w = document.getElementById('vw'); var media = w && activeMediaEl(w);
   if (media) media.style.cssText = '';
@@ -660,6 +666,11 @@ document.addEventListener('MSFullscreenChange', function () { if (!document.msFu
 
 if (tgFSSupported()) {
   tg.onEvent('fullscreenChanged', function () {
+    if (pdfScreenOpen()) {
+      applyPdfFsState(!!tg.isFullscreen);
+      try { if (tg.isFullscreen) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
+      return;
+    }
     var w = document.getElementById('vw'); if (!w) return;
     applyFsState(w, !!tg.isFullscreen);
     // The Telegram "✕" close button can't be hidden, but the BackButton can —
@@ -673,11 +684,13 @@ if (tgFSSupported()) {
     G.fsCoverTimer = setTimeout(fsCoverOff, 400);
   });
   tg.onEvent('fullscreenFailed', function () {
+    if (pdfScreenOpen()) { pdfCssFS(); return; }
     var w = document.getElementById('vw'); if (w) cssFS(w);
     clearTimeout(G.fsCoverTimer);
     G.fsCoverTimer = setTimeout(fsCoverOff, 400);
   });
   tg.onEvent('backButtonClicked', function () {
+    if (pdfScreenOpen()) { if (PDF.fs) pdfDoFS(); return; }
     if (G.fs) doFS();
   });
 }
@@ -795,7 +808,7 @@ if (window.pdfjsLib) {
 var PDF = {
   doc: null, moduleId: null, itemIdx: null,
   pageNum: 1, pageCount: 0, zoom: 1, baseScale: 1,
-  rendering: false, pending: false
+  rendering: false, pending: false, fs: false
 };
 
 // Derives our own /api/pdf-proxy URL from a raw R2 storage_url —
@@ -877,7 +890,7 @@ function openModulePdf(moduleId, itemIdx) {
 function closePdf() {
   if (PDF.doc) { try { PDF.doc.destroy(); } catch (e) {} }
   var moduleId = PDF.moduleId;
-  PDF.doc = null; PDF.rendering = false; PDF.pending = false;
+  PDF.doc = null; PDF.rendering = false; PDF.pending = false; PDF.fs = false;
   window.removeEventListener('resize', pdfOnViewportChange);
   window.removeEventListener('orientationchange', pdfOnViewportChange);
   clearTimeout(pdfResizeTimer);
@@ -957,22 +970,61 @@ function pdfSetZoom(z) {
 function pdfZoomIn() { pdfSetZoom(PDF.zoom + 0.25); }
 function pdfZoomOut() { pdfSetZoom(PDF.zoom - 0.25); }
 
-// CSS-only fullscreen (unlike the video player's doFS(), no Telegram/browser
-// Fullscreen API tier) — #s-pdf.fs just takes over the viewport via
-// position:fixed; #pdf-wrap already fills remaining flex space, so it grows
-// automatically once the back link/title are hidden. pdf-wrap/pdf-canvas
-// aren't recreated, so touch handlers (pinch/swipe/pan) keep working
-// unchanged; a forced re-render picks up the new (larger) container size.
-function pdfToggleFullscreen() {
-  var s = document.getElementById('s-pdf');
-  s.classList.toggle('fs');
+// Same 3-tier fullscreen as the video player's doFS() (Telegram Fullscreen
+// API -> standard browser Fullscreen API -> CSS-only fallback) — CSS alone
+// can only stretch content within Telegram's own window chrome, it can't
+// remove the native Telegram header the way the real APIs can. No URL_TOKEN
+// ("Открыть в браузере") branch here — PDFs aren't reachable through that
+// deep-link flow, unlike video topics. #pdf-wrap/#pdf-canvas are never
+// recreated by any tier, so touch handlers (pinch/swipe/pan) keep working
+// unchanged throughout.
+function pdfToggleFullscreen() { pdfDoFS(); }
+
+function pdfScreenOpen() {
+  var el = document.getElementById('s-pdf');
+  return !!(el && el.classList.contains('on'));
+}
+
+function pdfDoFS() {
+  var w = document.getElementById('s-pdf'); if (!w) return;
+  if (tgFSSupported()) {
+    if (PDF.fs) { try { tg.exitFullscreen(); } catch (e) {} return; }
+    try { tg.requestFullscreen(); } catch (e) {}
+    return;
+  }
+  var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  if (fsEl) {
+    var ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (ex) { try { ex.call(document); } catch (e) {} }
+    return;
+  }
+  if (PDF.fs) { pdfCssFS(); return; }
+  if (tg && tg.expand) { try { tg.expand(); } catch (e) {} }
+  var req = w.requestFullscreen || w.webkitRequestFullscreen || w.mozRequestFullScreen || w.msRequestFullscreen;
+  if (!req) { pdfCssFS(); return; }
+  var result;
+  try { result = req.call(w); } catch (e) { pdfCssFS(); return; }
+  if (result && typeof result.then === 'function') {
+    result.then(function () { setTimeout(pdfOnFsEnterResult, 100); }).catch(pdfCssFS);
+  } else {
+    setTimeout(pdfOnFsEnterResult, 100);
+  }
+}
+function pdfOnFsEnterResult() {
+  var nowFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  if (nowFs) { applyPdfFsState(true); }
+  else { pdfCssFS(); }
+}
+function applyPdfFsState(isFs) {
+  var w = document.getElementById('s-pdf'); if (!w) return;
+  PDF.fs = isFs; w.classList.toggle('fs', PDF.fs);
   syncPdfFS();
   if (PDF.doc) pdfRenderCurrent();
 }
+function pdfCssFS() { applyPdfFsState(!PDF.fs); }
 function syncPdfFS() {
   var b = document.getElementById('pdf-fsb'); if (!b) return;
-  var isFs = document.getElementById('s-pdf').classList.contains('fs');
-  b.innerHTML = isFs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>';
+  b.innerHTML = PDF.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>';
 }
 
 // Touch handling: two fingers always pinch-zoom (live CSS-transform preview,
