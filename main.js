@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-19';
+var FRONTEND_VERSION = 'etap2-20';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -783,8 +783,13 @@ function goNext() {
 // plugin. getDocument() only fetches the document structure up front and
 // streams individual pages via HTTP range requests, so per-page rendering
 // here is naturally lazy — no extra chunking logic needed on our side.
+// Pinned to the @3 major — pdfjs-dist@4 dropped the classic UMD build
+// entirely (legacy/build/pdf.min.js 404s; only .mjs ES-module bundles
+// remain), which is incompatible with this file's plain-script/no-bundler
+// setup. @3's legacy/build/pdf.min.js is still a real UMD build exposing
+// window.pdfjsLib, confirmed directly against the CDN before switching.
 if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/legacy/build/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3/legacy/build/pdf.worker.min.js';
 }
 
 var PDF = {
