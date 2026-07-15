@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-17';
+var FRONTEND_VERSION = 'etap2-18';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -803,6 +803,28 @@ function pdfProxyUrl(rawUrl) {
   return API_BASE + '/api/pdf-proxy?key=' + encodeURIComponent(key);
 }
 
+// Temporary diagnostic aid — Eruda (mobile console via CDN) turned out to be
+// unreachable from inside Telegram's WebView, so PDF-viewer errors are
+// reported over the same channel the rest of the API already uses
+// successfully instead of relying on an on-device console. sendBeacon is
+// fire-and-forget and non-blocking; fetch+keepalive is the fallback where
+// it's unavailable. Logged server-side only, see bot.py:handle_client_error.
+function reportClientError(context, err) {
+  try {
+    var payload = JSON.stringify({
+      message: err && err.message ? String(err.message) : String(err),
+      stack: err && err.stack ? String(err.stack) : null,
+      context: context
+    });
+    var url = API_BASE + '/api/client-error';
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([payload], { type: 'text/plain' }));
+    } else {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: payload, keepalive: true }).catch(function () {});
+    }
+  } catch (e) {}
+}
+
 function openModulePdf(moduleId, itemIdx) {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === moduleId; });
   var item = mod && mod.items[itemIdx];
@@ -830,6 +852,7 @@ function openModulePdf(moduleId, itemIdx) {
     pdfRenderCurrent();
   }).catch(function (err) {
     console.error('pdf.js getDocument failed:', err);
+    reportClientError('pdf.js getDocument failed', err);
     document.getElementById('pdf-loading').classList.add('hide');
     showPdfFallback();
   });
@@ -886,6 +909,7 @@ function pdfRenderCurrent() {
     if (PDF.pending) { PDF.pending = false; pdfRenderCurrent(); }
   }).catch(function (err) {
     console.error('pdf.js page render failed:', err);
+    reportClientError('pdf.js page render failed', err);
     PDF.rendering = false;
     document.getElementById('pdf-loading').classList.add('hide');
     showPdfFallback();
