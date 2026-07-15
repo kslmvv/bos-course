@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-21';
+var FRONTEND_VERSION = 'etap2-22';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -855,6 +855,8 @@ function openModulePdf(moduleId, itemIdx) {
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-pdf').classList.add('on');
+  window.addEventListener('resize', pdfOnViewportChange);
+  window.addEventListener('orientationchange', pdfOnViewportChange);
 
   if (!window.pdfjsLib) { showPdfFallback(); return; }
   document.getElementById('pdf-loading').classList.remove('hide');
@@ -876,6 +878,9 @@ function closePdf() {
   if (PDF.doc) { try { PDF.doc.destroy(); } catch (e) {} }
   var moduleId = PDF.moduleId;
   PDF.doc = null; PDF.rendering = false; PDF.pending = false;
+  window.removeEventListener('resize', pdfOnViewportChange);
+  window.removeEventListener('orientationchange', pdfOnViewportChange);
+  clearTimeout(pdfResizeTimer);
   document.getElementById('s-pdf').classList.remove('fs');
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   openModule(moduleId);
@@ -1025,9 +1030,22 @@ function initPdfViewer() {
   wrap.addEventListener('touchstart', pdfTouchStart, { passive: true });
   wrap.addEventListener('touchmove', pdfTouchMove, { passive: false });
   wrap.addEventListener('touchend', pdfTouchEnd, { passive: true });
-  window.addEventListener('resize', function () { if (PDF.doc) pdfRenderCurrent(); });
 }
 initPdfViewer();
+
+// Rotating the device while a PDF is open otherwise leaves the canvas at its
+// old (portrait) pixel size — pdfRenderCurrent() re-measures #pdf-wrap and
+// re-renders at the new size, but only needs to run once resize/orientation
+// settles (both fire, sometimes repeatedly, especially on iOS mid-rotation)
+// and PDF.pageNum/PDF.zoom are untouched, so the user stays on the same page
+// at the same zoom. Listener lifetime is scoped to the PDF screen itself —
+// attached in openModulePdf, detached in closePdf — instead of running for
+// the whole app, so it never piles up across repeated PDF opens.
+var pdfResizeTimer = null;
+function pdfOnViewportChange() {
+  clearTimeout(pdfResizeTimer);
+  pdfResizeTimer = setTimeout(function () { if (PDF.doc) pdfRenderCurrent(); }, 180);
+}
 
 // ─── Navigation / screens ────────────────────────────────────────────────
 
