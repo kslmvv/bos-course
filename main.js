@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-26';
+var FRONTEND_VERSION = 'etap2-27';
 
 // Permanent (not debug-only) on-screen version marker — cheap way to confirm
 // what's actually loaded on a device without relying on Telegram WebView
@@ -1057,9 +1057,27 @@ function pdfOnFsEnterResult() {
   if (nowFs) { applyPdfFsState(true); }
   else { pdfCssFS(); }
 }
+// Temporary — the video player's identical fullscreen callback path works
+// correctly on this same device, but the PDF screen's own #s-pdf.fs CSS
+// (position:fixed;inset:0, and hiding .back/#pdf-title) visibly doesn't take
+// effect even though fullscreenChanged does fire and this function does run
+// (confirmed via the pdfFsWatchdog logging above). Reads the DOM/computed
+// style back out immediately and again after 500ms, to see whether the class
+// is actually present and whether the CSS rule is actually matching, instead
+// of guessing. Remove once diagnosed.
 function applyPdfFsState(isFs) {
   var w = document.getElementById('s-pdf'); if (!w) return;
   PDF.fs = isFs; w.classList.toggle('fs', PDF.fs);
+  reportClientError('PDF FS applyPdfFsState applied',
+    'isFs=' + isFs + ' className=' + w.className + ' computedPosition=' + getComputedStyle(w).position);
+  setTimeout(function () {
+    var back = w.querySelector('.back');
+    reportClientError('PDF FS applyPdfFsState +500ms readback',
+      'className=' + w.className
+      + ' computedPosition=' + getComputedStyle(w).position
+      + ' computedInset=' + getComputedStyle(w).top + '/' + getComputedStyle(w).right + '/' + getComputedStyle(w).bottom + '/' + getComputedStyle(w).left
+      + ' backDisplay=' + (back ? getComputedStyle(back).display : 'no .back element found'));
+  }, 500);
   syncPdfFS();
   if (PDF.doc) pdfRenderCurrent();
 }
