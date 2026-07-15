@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-28';
+var FRONTEND_VERSION = 'etap2-29';
 
 // Permanent (not debug-only) on-screen version marker — cheap way to confirm
 // what's actually loaded on a device without relying on Telegram WebView
@@ -880,6 +880,9 @@ function openModulePdf(moduleId, itemIdx) {
   hidePdfFallback();
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
+  // "Liquid Glass" toolbar styling is opted into per-course rather than
+  // applied globally — currently only "АТМ" wants it.
+  document.getElementById('s-pdf').classList.toggle('pdf-glass', CURRENT_COURSE_ID === 'atm');
   document.getElementById('s-pdf').classList.add('on');
   window.addEventListener('resize', pdfOnViewportChange);
   window.addEventListener('orientationchange', pdfOnViewportChange);
@@ -907,6 +910,7 @@ function closePdf() {
   window.removeEventListener('resize', pdfOnViewportChange);
   window.removeEventListener('orientationchange', pdfOnViewportChange);
   clearTimeout(pdfResizeTimer);
+  clearTimeout(pdfCtrlTimer);
   document.getElementById('s-pdf').classList.remove('fs');
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   openModule(moduleId);
@@ -1091,6 +1095,7 @@ function applyPdfFsState(isFs) {
   PDF.fs = isFs; w.classList.toggle('fs', PDF.fs);
   pdfDumpBackState('applyPdfFsState applied');
   setTimeout(function () { pdfDumpBackState('applyPdfFsState +500ms readback'); }, 500);
+  if (PDF.fs) { pdfShowCtrl(true); } else { clearTimeout(pdfCtrlTimer); }
   syncPdfFS();
   if (PDF.doc) pdfRenderCurrent();
 }
@@ -1100,12 +1105,36 @@ function syncPdfFS() {
   b.innerHTML = PDF.fs ? '<svg><use href="#i-xfs"/></svg>' : '<svg><use href="#i-fs"/></svg>';
 }
 
+// Fullscreen-only toolbar visibility — same show/hide/auto-hide pattern as
+// the video player's showCtrl/hideCtrl/scheduleHide/tapVideo (see above).
+// Outside fullscreen #pdf-ctrl has no special CSS, so these are inert there.
+var pdfCtrlTimer = null;
+function pdfShowCtrl(autoHide) {
+  var c = document.getElementById('pdf-ctrl'); if (!c) return;
+  c.classList.add('show');
+  clearTimeout(pdfCtrlTimer);
+  if (autoHide !== false) pdfScheduleHideCtrl();
+}
+function pdfHideCtrl() {
+  var c = document.getElementById('pdf-ctrl'); if (!c) return;
+  clearTimeout(pdfCtrlTimer);
+  c.classList.remove('show');
+}
+function pdfScheduleHideCtrl() {
+  clearTimeout(pdfCtrlTimer);
+  pdfCtrlTimer = setTimeout(pdfHideCtrl, 3500);
+}
+function pdfTapToggleCtrl() {
+  var c = document.getElementById('pdf-ctrl'); if (!c) return;
+  if (c.classList.contains('show')) pdfHideCtrl(); else pdfShowCtrl(true);
+}
+
 // Touch handling: two fingers always pinch-zoom (live CSS-transform preview,
 // real pdf.js re-render only on release — re-rasterizing on every touchmove
 // would be far too slow). One finger only turns pages, and only at 100%
 // zoom; above that, single-finger drags are left alone so the wrap's native
 // overflow:auto scroll pans the enlarged page instead.
-var pdfTouch = { mode: null, startX: 0, startY: 0, startDist: 0, startZoom: 1 };
+var pdfTouch = { mode: null, startX: 0, startY: 0, startTime: 0, startDist: 0, startZoom: 1 };
 
 function pdfTouchDist(touches) {
   var dx = touches[0].clientX - touches[1].clientX, dy = touches[0].clientY - touches[1].clientY;
@@ -1116,10 +1145,14 @@ function pdfTouchStart(e) {
     pdfTouch.mode = 'pinch';
     pdfTouch.startDist = pdfTouchDist(e.touches);
     pdfTouch.startZoom = PDF.zoom;
-  } else if (e.touches.length === 1 && PDF.zoom <= 1.001) {
-    pdfTouch.mode = 'swipe';
+  } else if (e.touches.length === 1) {
+    // Zoomed in -> mode stays null (native overflow:auto panning takes
+    // over), but start position/time are still recorded so touchend below
+    // can tell a real drag apart from a tap regardless of zoom level.
+    pdfTouch.mode = (PDF.zoom <= 1.001) ? 'swipe' : null;
     pdfTouch.startX = e.touches[0].clientX;
     pdfTouch.startY = e.touches[0].clientY;
+    pdfTouch.startTime = Date.now();
   } else {
     pdfTouch.mode = null;
   }
@@ -1140,11 +1173,16 @@ function pdfTouchEnd(e) {
     var m = /scale\(([\d.]+)\)/.exec(canvas.style.transform || '');
     canvas.style.transform = '';
     pdfSetZoom(pdfTouch.startZoom * (m ? parseFloat(m[1]) : 1));
-  } else if (pdfTouch.mode === 'swipe') {
+  } else {
     var t = (e.changedTouches && e.changedTouches[0]) || { clientX: pdfTouch.startX, clientY: pdfTouch.startY };
     var dx = t.clientX - pdfTouch.startX, dy = t.clientY - pdfTouch.startY;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+    if (pdfTouch.mode === 'swipe' && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
       pdfGoToPage(PDF.pageNum + (dx < 0 ? 1 : -1));
+    } else if (PDF.fs && Math.abs(dx) < 10 && Math.abs(dy) < 10 && (Date.now() - pdfTouch.startTime) < 300) {
+      // Fullscreen-only tap-to-toggle — small enough movement and short
+      // enough duration to rule out both a real swipe (>50px) and a
+      // zoomed-in pan drag, so this never fires alongside either.
+      pdfTapToggleCtrl();
     }
   }
   pdfTouch.mode = null;
