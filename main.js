@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-22';
+var FRONTEND_VERSION = 'etap2-23';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -1044,7 +1044,12 @@ initPdfViewer();
 var pdfResizeTimer = null;
 function pdfOnViewportChange() {
   clearTimeout(pdfResizeTimer);
-  pdfResizeTimer = setTimeout(function () { if (PDF.doc) pdfRenderCurrent(); }, 180);
+  pdfResizeTimer = setTimeout(function () {
+    // One more tick after the debounce delay — avoids a race where
+    // #pdf-wrap's clientWidth is read a frame before the browser has
+    // actually finished reflow/layout for the new orientation.
+    requestAnimationFrame(function () { if (PDF.doc) pdfRenderCurrent(); });
+  }, 180);
 }
 
 // ─── Navigation / screens ────────────────────────────────────────────────
