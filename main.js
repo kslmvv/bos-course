@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-29';
+var FRONTEND_VERSION = 'etap2-30';
 
 // Permanent (not debug-only) on-screen version marker — cheap way to confirm
 // what's actually loaded on a device without relying on Telegram WebView
@@ -773,6 +773,7 @@ function openPlayer(topics, idx, badgeText, backFn, startPos, dayVideoId, module
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
   document.getElementById('s-player').classList.add('on');
+  document.getElementById('s-player').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
 
   var pos = startPos !== undefined ? startPos : G.segStart;
   if (startPos === undefined) saveProgress();
@@ -880,9 +881,10 @@ function openModulePdf(moduleId, itemIdx) {
   hidePdfFallback();
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function (n) { n.classList.remove('on'); });
-  // "Liquid Glass" toolbar styling is opted into per-course rather than
-  // applied globally — currently only "АТМ" wants it.
+  // "Liquid Glass" toolbar styling + brand color theme are opted into
+  // per-course rather than applied globally — currently only "АТМ" wants it.
   document.getElementById('s-pdf').classList.toggle('pdf-glass', CURRENT_COURSE_ID === 'atm');
+  document.getElementById('s-pdf').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
   document.getElementById('s-pdf').classList.add('on');
   window.addEventListener('resize', pdfOnViewportChange);
   window.addEventListener('orientationchange', pdfOnViewportChange);
@@ -1241,6 +1243,7 @@ function buildHome() {
   });
   h += '</div>';
   document.getElementById('s-home').innerHTML = h;
+  document.getElementById('s-home').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
 }
 
 function continueWatch(e) {
@@ -1501,7 +1504,7 @@ function buildMyCourses(courses, isAdmin) {
     h += '<div class="empty-state">Пока нет доступных курсов.<br>Обратитесь к администратору.</div>';
   } else {
     courses.forEach(function (c) {
-      h += '<div class="course-card" onclick="selectCourse(\'' + c.id + '\')">'
+      h += '<div class="course-card' + (c.id === 'atm' ? ' theme-atm' : '') + '" onclick="selectCourse(\'' + c.id + '\')">'
         + '<div class="course-ico">' + courseIconHtml(c.icon) + '</div>'
         + '<div class="course-info"><h3>' + c.title + '</h3>' + (c.subtitle ? '<p>' + c.subtitle + '</p>' : '') + '</div>'
         + '<div class="course-arrow">▶</div></div>';
@@ -1563,6 +1566,7 @@ function openModulesHome() {
   });
   h += '</div>';
   document.getElementById('s-home').innerHTML = h;
+  document.getElementById('s-home').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-home').classList.add('on');
   setNavVisible(false);
@@ -1585,6 +1589,7 @@ function openModule(id) {
     }
   });
   document.getElementById('s-module').innerHTML = h;
+  document.getElementById('s-module').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
   document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
   document.getElementById('s-module').classList.add('on');
 }
