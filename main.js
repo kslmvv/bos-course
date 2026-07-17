@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-30';
+var FRONTEND_VERSION = 'etap2-31';
 
 // Permanent (not debug-only) on-screen version marker — cheap way to confirm
 // what's actually loaded on a device without relying on Telegram WebView
@@ -1576,16 +1576,24 @@ function openModulesHome() {
 // pdf items), reusing the .bcard row look from buildBonus()/buildTools().
 // Video items drill into openModuleVideo (level 2, below); pdf items are a
 // stub for now — opening the file itself is a separate task.
+// Gold-outlined SVGs used in place of the 🎬/📄 emoji when a module's items
+// render under the "АТМ" brand theme — plain emoji (esp. the white 📄 page)
+// don't read well against the dark green/gold palette. Only ever inserted
+// when isAtm is true, so other courses keep the emoji unchanged.
+var ATM_VIDEO_ICON_SVG = '<svg viewBox="0 0 24 24" class="bico-svg"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 8l6 4-6 4V8z" fill="currentColor"/></svg>';
+var ATM_PDF_ICON_SVG = '<svg viewBox="0 0 24 24" class="bico-svg" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v5h5"/></svg>';
+
 function openModule(id) {
   var mod = COURSE_DATA.modules.find(function (m) { return m.id === id; });
   if (!mod) return;
+  var isAtm = CURRENT_COURSE_ID === 'atm';
   var h = '<div class="back" onclick="openModulesHome()">← Назад</div>'
     + '<div style="margin-bottom:16px"><div style="font-size:22px;font-weight:700">' + mod.title + '</div></div>';
   mod.items.forEach(function (item, i) {
     if (item.type === 'video') {
-      h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">🎬</div><div class="binfo"><h3>' + item.title + '</h3><p>' + (item.topics.length ? item.topics.length + ' тем' : 'Видео') + '</p></div><div class="barrow">▶</div></div>';
+      h += '<div class="bcard" onclick="openModuleVideo(' + id + ',' + i + ')"><div class="bico">' + (isAtm ? ATM_VIDEO_ICON_SVG : '🎬') + '</div><div class="binfo"><h3>' + item.title + '</h3><p>' + (item.topics.length ? item.topics.length + ' тем' : 'Видео') + '</p></div><div class="barrow">▶</div></div>';
     } else if (item.type === 'pdf') {
-      h += '<div class="bcard" onclick="openModulePdf(' + id + ',' + i + ')"><div class="bico">📄</div><div class="binfo"><h3>' + item.title + '</h3><p>PDF</p></div><div class="barrow">Открыть</div></div>';
+      h += '<div class="bcard" onclick="openModulePdf(' + id + ',' + i + ')"><div class="bico">' + (isAtm ? ATM_PDF_ICON_SVG : '📄') + '</div><div class="binfo"><h3>' + item.title + '</h3><p>PDF</p></div><div class="barrow">Открыть</div></div>';
     }
   });
   document.getElementById('s-module').innerHTML = h;
