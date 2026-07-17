@@ -6,13 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-31';
-
-// Permanent (not debug-only) on-screen version marker — cheap way to confirm
-// what's actually loaded on a device without relying on Telegram WebView
-// caching having already been busted, and without the Eruda/debug-flag
-// machinery this replaced.
-(function () { var b = document.getElementById('ver-badge'); if (b) b.textContent = 'v=' + FRONTEND_VERSION; })();
+var FRONTEND_VERSION = 'etap2-32';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
