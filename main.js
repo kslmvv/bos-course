@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-33';
+var FRONTEND_VERSION = 'etap2-35';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -43,7 +43,7 @@ function progressKey() {
 var G = {
   topics: [], idx: 0, badgeText: '', backFn: null, moduleId: null, itemIdx: null,
   player: null, mode: null, ytPlayer: null, ytReady: false, video: null, hls: null, pipSupported: false,
-  playing: false, ready: false, fs: false,
+  playing: false, ready: false, fs: false, justLoaded: false,
   pendingVid: null, pendingPos: 0, ctrlTimer: null, progTimer: null, saveTimer: null, statsTimer: null,
   ytFallbackTimer: null,
   currentVid: null, segStart: 0, segEnd: 0, topicEndShown: false,
@@ -224,8 +224,16 @@ function onYouTubeIframeAPIReady() {
       onStateChange: function (e) {
         if (G.mode !== 'yt') return;
         G.playing = (e.data === YT.PlayerState.PLAYING);
-        if (G.playing) { clearTimeout(G.ytFallbackTimer); hideYtFallback(); G.ready = true; applySpeed(); startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
-        else { clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); }
+        if (G.playing) { clearTimeout(G.ytFallbackTimer); hideYtFallback(); G.ready = true; G.justLoaded = false; applySpeed(); startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); }
+        else {
+          clearInterval(G.progTimer); clearInterval(G.statsTimer);
+          // The first onStateChange after loadVideoById() is almost always
+          // buffering/unstarted, not PLAYING — getCurrentTime() can still be
+          // 0 there (the seek to startSeconds hasn't landed yet), so saving
+          // here would stomp the real resume position with 0.
+          if (!G.justLoaded) { saveProgress(); reportProgress(); }
+          showCtrl(false);
+        }
         syncPB();
       },
       onError: function () { showYtFallback(); }
@@ -262,15 +270,18 @@ function loadVideo(vid, startPos) {
   setMediaMode(mode);
   if (mode === 'hls') {
     loadHlsSrc(vid, startPos);
+    G.justLoaded = true;
     G.ready = true;
     startProg();
   } else if (G.ytReady && G.ytPlayer && G.ytPlayer.loadVideoById) {
     G.ytPlayer.loadVideoById({ videoId: vid, startSeconds: startPos });
+    G.justLoaded = true;
     G.ready = true;
     applySpeed();
     scheduleYtFallbackCheck(vid);
   } else {
     G.pendingVid = vid; G.pendingPos = startPos;
+    G.justLoaded = true;
     scheduleYtFallbackCheck(vid);
   }
   G.currentVid = vid;
@@ -305,6 +316,7 @@ function openOnYouTube() {
 function seekWithinVideo(pos) {
   resetPlayerUI();
   try { G.player.seekTo(pos, true); G.player.playVideo(); } catch (e) {}
+  G.justLoaded = true;
   G.ready = true;
   applySpeed();
   startProg();
@@ -424,16 +436,25 @@ function initPlayer() {
   };
   G.video.addEventListener('play', function () {
     if (G.mode !== 'hls') return;
-    G.playing = true; G.ready = true; startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); syncPB();
+    G.playing = true; G.ready = true; G.justLoaded = false; startProg(); startSaveTimer(); startStatsTimer(); scheduleHide(); syncPB();
   });
   G.video.addEventListener('pause', function () {
     if (G.mode !== 'hls') return;
     G.playing = false;
-    clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); showCtrl(false); syncPB();
+    clearInterval(G.progTimer); clearInterval(G.statsTimer);
+    // Switching videos calls .pause() on the OLD <video> element before the
+    // new one has started playing; that pause fires this handler
+    // asynchronously, by which point G.idx/segStart already point at the
+    // NEW topic — so without this guard it saves the new topic's progress
+    // using the old video's stale currentTime.
+    if (!G.justLoaded) { saveProgress(); reportProgress(); }
+    showCtrl(false); syncPB();
   });
   G.video.addEventListener('ended', function () {
     if (G.mode !== 'hls') return;
-    G.playing = false; clearInterval(G.progTimer); clearInterval(G.statsTimer); saveProgress(); reportProgress(); syncPB();
+    G.playing = false; clearInterval(G.progTimer); clearInterval(G.statsTimer);
+    if (!G.justLoaded) { saveProgress(); reportProgress(); }
+    syncPB();
   });
   initPiP();
 }
@@ -741,7 +762,10 @@ window.addEventListener('beforeunload', flushProgressOnExit);
 function stopVideo() {
   clearInterval(G.progTimer); clearInterval(G.saveTimer); clearInterval(G.statsTimer); clearTimeout(G.ctrlTimer);
   clearTimeout(G.ytFallbackTimer); hideYtFallback();
-  saveProgress(); reportProgress();
+  // Backing out within the just-loaded window would otherwise save/report
+  // the stale (pre-seek) position — openPlayer()/reportWatchProgress()
+  // already recorded the correct resume position when this video opened.
+  if (!G.justLoaded) { saveProgress(); reportProgress(); }
   if (playerReady()) { try { G.player.stopVideo(); } catch (e) {} }
   G.playing = false; syncPB(); hideCtrl();
 }
