@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-36';
+var FRONTEND_VERSION = 'etap2-37';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -75,6 +75,7 @@ function reportStats(day, topic, progress) {
   fetch(url, {
     method: 'POST',
     headers: apiHeaders({ 'Content-Type': 'application/json' }),
+    keepalive: true,
     body: JSON.stringify({ day: day, topic: topic, progress: Math.max(0, Math.floor(progress || 0)) })
   }).catch(function () {});
 }
@@ -90,6 +91,12 @@ function reportWatchProgress(courseId, sectionKey, sectionLabel, topicIdx, topic
   fetch(url, {
     method: 'POST',
     headers: apiHeaders({ 'Content-Type': 'application/json' }),
+    // keepalive lets this request outlive page teardown — this is the one
+    // call that actually persists "Продолжить просмотр" position, and it's
+    // fired from exactly the moments (stopVideo on "← Назад",
+    // flushProgressOnExit on visibilitychange/pagehide/beforeunload) where
+    // a mobile WebView is most likely to kill an in-flight fetch otherwise.
+    keepalive: true,
     body: JSON.stringify({
       course_id: courseId,
       section_key: sectionKey || '',
@@ -1244,8 +1251,7 @@ function goTab(t) {
 
 function buildHome() {
   var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
-    + '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div>'
-    + '<button class="theme-btn" id="themeBtn" onclick="toggleTheme()"><svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg></button></div>';
+    + '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div></div>';
   h += '<div class="stitle">Программа курса</div><div class="grid">';
   COURSE_DATA.days.forEach(function (d) {
     h += '<div class="dcard" onclick="openDay(' + d.id + ')"><div class="n">' + d.id + '</div><div class="l">' + d.title + '</div><div class="c">' + d.topics.length + ' тем</div></div>';
@@ -1496,9 +1502,10 @@ async function openContinueWatching(e) {
 }
 
 function buildMyCourses(courses, isAdmin) {
-  var h = '<div class="mc-hdr"><div><h1>Мои курсы</h1><p>BilimBook</p></div>';
+  var h = '<div class="mc-hdr"><div><h1>Мои курсы</h1><p>BilimBook</p></div><div class="mc-hdr-btns">';
   if (isAdmin) h += '<button class="admin-btn" onclick="goAdmin()" title="Админ-панель">⚙️</button>';
-  h += '</div>';
+  h += '<button class="theme-btn" id="themeBtn" onclick="toggleTheme()"><svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg></button>';
+  h += '</div></div>';
   h += continueWatchingCardHtml(CONTINUE_WATCHING);
   if (!courses || !courses.length) {
     h += '<div class="empty-state">Пока нет доступных курсов.<br>Обратитесь к администратору.</div>';
