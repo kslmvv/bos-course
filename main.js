@@ -149,7 +149,6 @@ function saveProgress() {
   } catch (e) {}
 }
 function loadProgress() { try { return JSON.parse(localStorage.getItem(progressKey()) || 'null'); } catch (e) { return null; } }
-function clearProgress() { try { localStorage.removeItem(progressKey()); } catch (e) {} }
 function startSaveTimer() {
   clearInterval(G.saveTimer);
   G.saveTimer = setInterval(function () { if (G.playing) saveProgress(); }, 5000);
@@ -1247,14 +1246,6 @@ function buildHome() {
   var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
     + '<div class="hdr hdr-logo"><img class="logo" src="logo.jpg" alt="Business Booster"><div><h1>БОС Курс</h1><p>Бизнес Операционная Система<br>от Александра Высоцкого</p></div>'
     + '<button class="theme-btn" id="themeBtn" onclick="toggleTheme()"><svg><use href="#i-' + (G.theme === 'light' ? 'moon' : 'sun') + '"/></svg></button></div>';
-  var prog = loadProgress();
-  if (prog && prog.type === 'day' && prog.dayId) {
-    var posStr = prog.pos > 0 ? ' (' + fmt(prog.pos) + ')' : '';
-    h += '<div class="continue-card"><div class="continue-label">▶ Продолжить просмотр</div>'
-      + '<div class="continue-title">' + prog.badgeText + ' — Тема ' + (prog.idx + 1) + posStr + '<br><span style="font-size:13px;font-weight:400;color:var(--tx2)">' + prog.title + '</span></div>'
-      + '<div class="continue-btns"><button class="cbtn-cont" onclick="continueWatch(event)">Продолжить</button>'
-      + '<button class="cbtn-new" onclick="startNew(event)">С начала</button></div></div>';
-  }
   h += '<div class="stitle">Программа курса</div><div class="grid">';
   COURSE_DATA.days.forEach(function (d) {
     h += '<div class="dcard" onclick="openDay(' + d.id + ')"><div class="n">' + d.id + '</div><div class="l">' + d.title + '</div><div class="c">' + d.topics.length + ' тем</div></div>';
@@ -1263,15 +1254,6 @@ function buildHome() {
   document.getElementById('s-home').innerHTML = h;
   document.getElementById('s-home').classList.toggle('theme-atm', CURRENT_COURSE_ID === 'atm');
 }
-
-function continueWatch(e) {
-  e.stopPropagation(); var prog = loadProgress(); if (!prog || !prog.dayId) return;
-  var day = COURSE_DATA.days.find(function (d) { return d.id === prog.dayId; });
-  if (!day) return;
-  var sp = prog.pos || day.topics[prog.idx].startSeconds || 0;
-  openPlayer(day.topics, prog.idx, 'ДЕНЬ ' + prog.dayId, function () { openDay(prog.dayId); }, sp, day.videoHlsUrl);
-}
-function startNew(e) { e.stopPropagation(); clearProgress(); buildHome(); }
 
 function openDay(id) {
   var day = COURSE_DATA.days.find(function (d) { return d.id === id; });
