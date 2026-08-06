@@ -12,7 +12,7 @@ var BOT_USERNAME = 'BilimBook_bot';
 // reused to cache-bust goBack()'s in-app navigation to index.html. Keep
 // this in sync by hand with main.js's own FRONTEND_VERSION and both
 // <script>?v= tags.
-var FRONTEND_VERSION = 'etap2-37';
+var FRONTEND_VERSION = 'etap2-38';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -24,7 +24,8 @@ var INIT_DATA = tg ? tg.initData : '';
 var ADMIN_COURSES = [
   { id: 'bos', title: 'БОС Курс', icon: 'logo.jpg' },
   { id: 'roadmap', title: 'Дорожная карта: 12 шагов (live)', icon: 'roadmap_icon.png' },
-  { id: 'atm', title: 'АТМ', icon: 'https://pub-633ad4e98b3c43a1a84f5168e7d6b219.r2.dev/course-materials/atm/logo.png' }
+  { id: 'atm', title: 'АТМ', icon: 'https://pub-633ad4e98b3c43a1a84f5168e7d6b219.r2.dev/course-materials/atm/logo.png' },
+  { id: 'atm_fot', title: '5+1 вариантов ФОТ от результата', icon: 'https://pub-633ad4e98b3c43a1a84f5168e7d6b219.r2.dev/course-materials/atm/logo.png' }
 ];
 
 var USERS = [];

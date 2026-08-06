@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-37';
+var FRONTEND_VERSION = 'etap2-38';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -1510,7 +1510,17 @@ function buildMyCourses(courses, isAdmin) {
   if (!courses || !courses.length) {
     h += '<div class="empty-state">Пока нет доступных курсов.<br>Обратитесь к администратору.</div>';
   } else {
+    var seenGroups = {};
     courses.forEach(function (c) {
+      if (c.group_id) {
+        if (seenGroups[c.group_id]) return;
+        seenGroups[c.group_id] = true;
+        h += '<div class="course-card" onclick="openCourseGroup(\'' + c.group_id + '\')">'
+          + '<div class="course-ico">' + courseIconHtml(c.group_icon) + '</div>'
+          + '<div class="course-info"><h3>' + c.group_title + '</h3></div>'
+          + '<div class="course-arrow">▶</div></div>';
+        return;
+      }
       h += '<div class="course-card' + (c.id === 'atm' ? ' theme-atm' : '') + '" onclick="selectCourse(\'' + c.id + '\')">'
         + '<div class="course-ico">' + courseIconHtml(c.icon) + '</div>'
         + '<div class="course-info"><h3>' + c.title + '</h3>' + (c.subtitle ? '<p>' + c.subtitle + '</p>' : '') + '</div>'
@@ -1518,6 +1528,25 @@ function buildMyCourses(courses, isAdmin) {
     });
   }
   document.getElementById('s-mycourses').innerHTML = h;
+}
+
+// Level 0.5: a group "folder" card on "Мои курсы" expands into its member
+// courses (same .course-card markup/click-through as the flat list) instead
+// of going straight into one course. selectCourse() itself is untouched.
+function openCourseGroup(groupId) {
+  var members = MY_COURSES.filter(function (c) { return c.group_id === groupId; });
+  if (!members.length) return;
+  var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
+    + '<div class="hdr"><h1>' + members[0].group_title + '</h1></div>';
+  members.forEach(function (c) {
+    h += '<div class="course-card' + (c.id === 'atm' ? ' theme-atm' : '') + '" onclick="selectCourse(\'' + c.id + '\')">'
+      + '<div class="course-ico">' + courseIconHtml(c.icon) + '</div>'
+      + '<div class="course-info"><h3>' + c.title + '</h3>' + (c.subtitle ? '<p>' + c.subtitle + '</p>' : '') + '</div>'
+      + '<div class="course-arrow">▶</div></div>';
+  });
+  document.getElementById('s-group').innerHTML = h;
+  document.querySelectorAll('.sc,#s-player,#s-pdf').forEach(function (s) { s.classList.remove('on'); });
+  document.getElementById('s-group').classList.add('on');
 }
 
 async function initMyCoursesScreen() {
