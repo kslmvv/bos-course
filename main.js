@@ -6,7 +6,7 @@ var API_BASE = 'https://bos-bot-production.up.railway.app';
 // in index.html/admin.html — reused to cache-bust in-app HTML navigation
 // (goAdmin/goBack), which a plain filename query on the <script> tag alone
 // doesn't cover. Keep the three in sync by hand.
-var FRONTEND_VERSION = 'etap2-38';
+var FRONTEND_VERSION = 'etap2-39';
 
 var tg = window.Telegram && window.Telegram.WebApp;
 var INIT_DATA = tg ? tg.initData : '';
@@ -1475,8 +1475,9 @@ function openContinueWatchingTarget(cw) {
     return true;
   }
   if (isSingleVideoCourse(COURSE_DATA) && COURSE_DATA.topics[idx]) {
+    var backFn = COURSE_DATA.topics.length === 1 ? backToMyCourses : openSingleVideoCourse;
     openSingleVideoCourse();
-    openPlayer(COURSE_DATA.topics, idx, COURSE_DATA.title.toUpperCase(), openSingleVideoCourse, cw.position_seconds, COURSE_DATA.videoId);
+    openPlayer(COURSE_DATA.topics, idx, COURSE_DATA.title.toUpperCase(), backFn, cw.position_seconds, COURSE_DATA.videoId);
     return true;
   }
   return false;
@@ -1678,6 +1679,10 @@ function openModuleVideoTopic(moduleId, itemIdx, topicIdx) {
 
 function openSingleVideoCourse() {
   var d = COURSE_DATA;
+  if (d.topics.length === 1) {
+    openPlayer(d.topics, 0, d.title.toUpperCase(), backToMyCourses, d.topics[0].startSeconds || 0, d.videoId);
+    return;
+  }
   var prog = loadProgress();
   var savedIdx = prog ? prog.idx : -1;
   var h = '<div class="back" onclick="backToMyCourses()">← Мои курсы</div>'
